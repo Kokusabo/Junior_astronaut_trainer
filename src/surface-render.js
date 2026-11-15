@@ -170,15 +170,15 @@ const SurfaceRender = (function () {
       else { ctx.globalAlpha = 1 - a / 0.6; ctx.fillStyle = '#fff2c0'; ctx.beginPath(); ctx.arc(flash.x, fy, 2 + a * 8, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; if (a < 0.3) T('IMPACT FLASH', flash.x, fy - 16, '#ffd34d', 1, 'center'); }
     }
   }
-  // Tranquility Base: the real Apollo 11 descent stage and flag (1969), out on the plain.
+  // Tranquility Base: the first landing site's old descent stage and a flag (1969), out on the plain.
   function apollo11(s, SX, SY) {
     if (s.site.id !== 'tranquility') return;
     const wx = s.base + 520, x = SX(wx), gy = SY(Surface.heightAt(s, wx));
     if (x < -40 || x > W + 40) return;
     px(x - 9, gy - 9, 18, 6, '#c8962a'); px(x - 9, gy - 9, 18, 1, '#e0b850'); px(x - 2, gy - 3, 4, 2, '#5a5a66');
     for (const d of [-1, 1]) { for (let k = 0; k < 6; k++) px(x + d * (8 + k), gy - 4 + k * 0.7, 1, 1, '#a8aab6'); px(x + d * 14 - 1, gy, 3, 1, '#a8aab6'); }
-    px(x + 22, gy - 16, 1, 16, '#c8ccd6'); px(x + 23, gy - 16, 7, 5, '#e6e8ee'); px(x + 23, gy - 16, 3, 3, '#3446a6'); for (let k = 0; k < 3; k++) px(x + 26, gy - 15 + k * 2, 4, 1, '#d0404a');
-    T('APOLLO 11, 1969', x + 6, gy - 30, '#ffd34d', 1, 'center');
+    px(x + 22, gy - 16, 1, 16, '#c8ccd6'); px(x + 23, gy - 16, 7, 5, '#2f9d8f'); px(x + 25, gy - 15, 3, 3, '#ffd34d'); // our own flag: teal cloth, gold sun
+    T('FIRST LANDING SITE, 1969', x + 6, gy - 30, '#ffd34d', 1, 'center');
   }
 
   // ---- Animations: airlock, idle look-around, suit leak vapour, hop landing dust, rewards, the finale ----
@@ -235,7 +235,7 @@ const SurfaceRender = (function () {
     if (endAt === null) endAt = t;
     const bx = SX(s.base + 26), gy = SY(Surface.heightAt(s, s.base + 26)), a = t - endAt;
     const fh = Math.min(20, a * 30); // the flag goes in
-    px(bx + 18, gy - fh, 1, fh, '#c8ccd6'); if (a > 0.7) { px(bx + 19, gy - 20, 9, 6, '#e6e8ee'); px(bx + 19, gy - 20, 4, 3, '#3446a6'); for (let k = 0; k < 3; k++) px(bx + 23, gy - 19 + k * 2, 5, 1, '#d0404a'); }
+    px(bx + 18, gy - fh, 1, fh, '#c8ccd6'); if (a > 0.7) { px(bx + 19, gy - 20, 9, 6, '#2f9d8f'); px(bx + 22, gy - 19, 3, 3, '#ffd34d'); }
     astronaut(bx, gy, 1, t, false, Math.floor(t * 3) % 2 === 0, false); // waving: the arm goes up and down
   }
 
@@ -333,7 +333,10 @@ const SurfaceRender = (function () {
     } else if (s.phase === 'base') T(`PRESS E TO START EVA ${s.eva + 1}`, cx, 30, '#4dffc3', 2, 'center');
   }
 
-  return { draw, suitFrame, W, H }; // suitFrame: for previews and tests
+  // Bakes one astronaut pose per call (idle frames), so the first steps do not hitch. Returns true while poses remain.
+  const poses = [-1, ...Array.from({ length: 16 }, (_, i) => i)].flatMap((k) => [[k, false], [k, true]]);
+  const warm = () => { const p = poses.shift(); if (p) suitFrame(p[0], p[1]); return poses.length > 0; };
+  return { draw, suitFrame, warm, W, H }; // suitFrame: for previews and tests
 })();
 
 if (typeof module !== 'undefined') module.exports = SurfaceRender;

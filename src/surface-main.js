@@ -104,6 +104,7 @@
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
+    SurfaceRender.warm(); // bake astronaut poses a little each frame
     Surface.stepSurface(s, dt, input);
     input.hop = false;
     SurfaceRender.draw(ctx, now / 1000, s);
