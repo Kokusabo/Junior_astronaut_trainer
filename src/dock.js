@@ -12,6 +12,7 @@ const Dock = (function () {
     if (s.status !== 'flying') return;
     const c = s.cfg;
     s.t += dt;
+    s.fire = { thrust: !!input.thrust, brake: !input.thrust && s.vx > c.slow + 0.05, up: !!input.up, down: !!input.down }; // which thrusters fire, for the picture
     const target = input.thrust ? c.fast : c.slow;
     s.vx += Math.sign(target - s.vx) * Math.min(Math.abs(target - s.vx), c.accel * dt * (input.thrust ? 1 : 2));
     s.vy += ((input.down ? 1 : 0) - (input.up ? 1 : 0)) * 6 * dt;

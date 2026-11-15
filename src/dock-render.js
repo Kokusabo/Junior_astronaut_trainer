@@ -29,6 +29,14 @@ const DockRender = (function () {
     ctx.save(); ctx.translate(Math.round(lx), Math.round(ly)); ctx.rotate(Math.PI / 2);
     ctx.drawImage(sprite, 0, 0, 32, 14, Math.round(-lw / 2), Math.round(-lh / 2), Math.round(lw), Math.round(lh));
     ctx.restore();
+    // Small thrusters (RCS): four nubs on the lander; puffs show which ones fire.
+    const f = s.fire || {}, nub = (x, y) => px(x - 1, y - 1, 3, 3, '#9aa0b0');
+    nub(lx - lh / 2 - 1, ly); nub(lx + lh / 2 + 1, ly - 6); nub(lx, ly - 15); nub(lx, ly + 15);
+    const puff = (x, y, dx, dy) => { for (let k = 0; k < 7; k++) { ctx.globalAlpha = 1 - k / 7; px(x + dx * k * 2 + (Math.random() - 0.5), y + dy * k * 2 + (Math.random() - 0.5), 2, 2, k < 2 ? '#ffffff' : '#bfe8ff'); } ctx.globalAlpha = 1; };
+    if (f.thrust) puff(lx - lh / 2 - 3, ly, -1, 0);
+    if (f.brake) puff(lx + lh / 2 + 3, ly - 6, 1, 0);
+    if (f.up) puff(lx, ly + 17, 0, 1);
+    if (f.down) puff(lx, ly - 17, 0, -1);
     if (s.status === 'docked') { ctx.globalAlpha = 0.4 + 0.3 * Math.sin(t * 8); px(nose - 1, OY - 10, 2, 20, '#4dffc3'); ctx.globalAlpha = 1; }
     // Readouts.
     MoonRender.hudPanel(ctx, 6, 6, 170, 62);

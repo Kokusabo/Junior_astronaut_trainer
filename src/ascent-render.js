@@ -33,7 +33,18 @@ const AscentRender = (function () {
       const cy = SY(-R_MOON), r = R_MOON * k;
       ctx.fillStyle = '#4a4650'; ctx.beginPath(); ctx.arc(RX, cy, r, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = '#8e8a94'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(RX, cy, r, Math.PI, Math.PI * 2); ctx.stroke();
-      for (let i = 0; i < 18; i++) { const a = -Math.PI / 2 + (i - 9) * 0.004 * (20 / Math.max(1, k)), rr = r - 8 - (i % 4) * 7; ctx.fillStyle = i % 2 ? '#3a3640' : '#5e5a64'; ctx.beginPath(); ctx.ellipse(RX + Math.cos(a) * rr, cy + Math.sin(a) * rr, 4 + (i % 3) * 3, 1.5, 0, 0, Math.PI * 2); ctx.fill(); }
+      // Surface texture that scrolls with the ground (craters and dark patches hashed per ground cell), clipped to the disc.
+      ctx.save(); ctx.beginPath(); ctx.arc(RX, cy, r, 0, Math.PI * 2); ctx.clip();
+      const cw = 46 / k, top = (x) => cy - Math.sqrt(Math.max(0, r * r - (x - RX) * (x - RX)));
+      for (let c = Math.floor((s.x - RX / k) / cw); c <= Math.ceil((s.x + (W - RX) / k) / cw); c++) {
+        for (let q = 0; q < 3; q++) {
+          const h = Math.sin(c * 127.1 + q * 311.7) * 43758.5453, f = h - Math.floor(h), h2 = Math.sin(c * 269.5 + q * 183.3) * 43758.5453, g = h2 - Math.floor(h2);
+          const x = SX((c + f) * cw), y = top(x) + 8 + g * 120, rx = 5 + f * g * 22;
+          ctx.fillStyle = q === 2 ? '#56525c' : '#3a3640'; ctx.beginPath(); ctx.ellipse(Math.round(x), Math.round(y), rx, rx * 0.32, 0, 0, Math.PI * 2); ctx.fill();
+          if (q < 2) { ctx.fillStyle = '#5e5a64'; ctx.fillRect(Math.round(x - rx), Math.round(y - rx * 0.32), Math.round(rx * 2), 1); }
+        }
+      }
+      ctx.restore();
       if (MoonRender.drawEarthAt) MoonRender.drawEarthAt(ctx, 520, Math.max(60, cy - r - 30), 16);
     }
     // Guidance: where a perfect ascent goes.

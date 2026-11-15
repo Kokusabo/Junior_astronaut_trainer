@@ -14,6 +14,7 @@ const LaunchRender = (function () {
   const clouds = [];
   for (let i = 0; i < 26; i++) clouds.push([-3 + rnd() * 30, 1.2 + rnd() * 2.2, 0.4 + rnd() * 1.2, i % 3 === 0]);
   for (let i = 0; i < 10; i++) clouds.push([rnd() * 60, 8 + rnd() * 3, 2 + rnd() * 4, false]);
+  for (let x = -40; x < 140; x += 0.5) clouds.push([x + rnd() * 0.3, 0.3 + rnd() * 0.8, 0.6 + rnd() * 0.7, false]); // a low bank along the whole horizon
 
   // Rocket sprites (nose up), 1 px = about 1.5 m: two side boosters, orange core, upper stage, capsule, abort tower.
   const RW = 22, RH = 64;
@@ -135,6 +136,18 @@ const LaunchRender = (function () {
     } else {
       const cy = SY(-R_EARTH), r = R_EARTH * k;
       ctx.fillStyle = '#1a2456'; ctx.beginPath(); ctx.arc(RX, cy, r, 0, Math.PI * 2); ctx.fill();
+      // Surface texture that scrolls with the ground (sea swells, darker water, a few dim land patches), clipped to the disc.
+      ctx.save(); ctx.beginPath(); ctx.arc(RX, cy, r, 0, Math.PI * 2); ctx.clip();
+      const cw = 60 / k, top = (x) => cy - Math.sqrt(Math.max(0, r * r - (x - RX) * (x - RX)));
+      for (let c = Math.floor((s.x - RX / k) / cw); c <= Math.ceil((s.x + (W - RX) / k) / cw); c++) {
+        for (let q = 0; q < 4; q++) {
+          const h = Math.sin(c * 127.1 + q * 311.7) * 43758.5453, f = h - Math.floor(h), h2 = Math.sin(c * 269.5 + q * 183.3) * 43758.5453, g = h2 - Math.floor(h2);
+          const x = SX((c + f) * cw), y = top(x) + 6 + g * g * 150, rx = 10 + f * 40;
+          ctx.fillStyle = q === 3 ? '#2a3640' : q === 2 ? '#222c64' : '#141b46';
+          ctx.beginPath(); ctx.ellipse(Math.round(x), Math.round(y), rx, rx * (q === 3 ? 0.22 : 0.14), 0, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+      ctx.restore();
       ctx.fillStyle = 'rgba(255,200,180,0.18)';
       for (let i = 0; i < 30; i++) { const a = -Math.PI / 2 + (i - 15) * 0.0025 * (20 / Math.max(1, k)); ctx.fillRect(Math.round(RX + Math.cos(a) * (r - 6 - (i % 3) * 5)), Math.round(cy + Math.sin(a) * (r - 6 - (i % 3) * 5)), 6 + (i % 4) * 4, 2); }
       // Twilight along the edge of the Earth: orange, pink, then the blue of the upper air.
