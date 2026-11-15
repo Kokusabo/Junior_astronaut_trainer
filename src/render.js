@@ -3,7 +3,7 @@
 const Render = (function () {
   const W = 640, H = 360;
   const RX = 340, BASE = 292; // rocket centre x and engine base y
-  const HZ = 264;             // horizon line
+  const HZ = 248;             // horizon line (far shore); the river runs from here to the pad
 
   // Status light per system: off (not in this level), unknown (not checked), verify (repaired, needs re-check), ok, fail, repair.
   function lampState(id, s) {
@@ -44,71 +44,160 @@ const Render = (function () {
       if (e2 <= dx) { err += dx; y0 += sy; }
     }
   }
+  // Sprite cache: parts that rarely change are drawn once into an offscreen canvas and reused with
+  // drawImage, instead of thousands of fillRects every frame. Keys include colours, so a new time of day
+  // or weather makes new sprites; the cache is emptied if it grows large (e.g. during a timelapse).
+  const sprites = new Map();
+  function sprite(key, w, h, draw) {
+    let c = sprites.get(key);
+    if (!c) {
+      if (sprites.size > 240) sprites.clear();
+      c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const saved = ctx;
+      ctx = c.getContext('2d');
+      draw();
+      ctx = saved;
+      sprites.set(key, c);
+    }
+    return c;
+  }
+  const q = (v, step = 0.1) => Math.round(v / step) * step; // quantise blend weights so keys repeat
+
   const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
   const mix = (a, b, t) => {
     const A = hex(a), B = hex(b);
     return `#${A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, '0')).join('')}`;
   };
 
-  // ---------- Static backdrop: sky, sun, far shore. Baked once, it never changes. ----------
-  const SKY = ['#140828', '#1c0b36', '#260e44', '#331250', '#45175a', '#5c1d62', '#782566', '#963066', '#b53e62', '#d4505a', '#ee6a50', '#ff8a4a'];
-  let backdrop = null;
-  function bake() {
+  // ---------- Sky, sun/moon and far shore, for any time of day ----------
+  // Four palettes (top of sky to horizon), blended by the hour. Each sky and shore is baked once.
+  const PAL = {
+    night: { sky: ['#04020c', '#060312', '#080418', '#0a061e', '#0c0824', '#0f0a2a', '#120c30', '#160f36', '#1a123c', '#1e1542', '#231848', '#2a1c4e'],
+      shore: '#07051a', bld: '#0e0a26', lit: '#ffcf6b', sea: ['#1c1440', '#0a0618'], cloud: '#1c1638', ground: ['#100c22', '#08060f'], grass: '#16122a' },
+    dawn: { sky: ['#1c1440', '#2a1a52', '#3c2264', '#542a72', '#70347c', '#904082', '#b04e84', '#cc6082', '#e07a80', '#ee9a82', '#f6b888', '#fcd290'],
+      shore: '#2a1838', bld: '#352044', lit: '#ffcf6b', sea: ['#c07a8a', '#3a2048'], cloud: '#8a4a7a', ground: ['#3a2440', '#22142c'], grass: '#4a3048' },
+    day: { sky: ['#2a5ab0', '#2e62b8', '#346cc0', '#3a76c8', '#4280d0', '#4a8ad6', '#5494dc', '#5e9ee0', '#6aa8e4', '#78b2e8', '#88bcea', '#9cc8ec'],
+      shore: '#2c3a4e', bld: '#3e4c62', lit: '#9cc8ec', sea: ['#6aa0d0', '#2a4a78'], cloud: '#e6ecf6', ground: ['#4e5a46', '#2e3a2e'], grass: '#5e7a4a' },
+    dusk: { sky: ['#140828', '#1c0b36', '#260e44', '#331250', '#45175a', '#5c1d62', '#782566', '#963066', '#b53e62', '#d4505a', '#ee6a50', '#ff8a4a'],
+      shore: '#2a0f35', bld: '#331240', lit: '#ffcf6b', sea: ['#7a3a5e', '#2e1640'], cloud: '#5a2462', ground: ['#2c1a3a', '#1a0e26'], grass: '#3a2448' },
+  };
+  const SKY = PAL.dusk.sky; // used by the night fade above the backdrop during liftoff
+  // Hour -> two palettes and a blend weight. Launches happen at dusk (18:30).
+  const ANCHORS = [[0, 'night'], [5, 'night'], [6.5, 'dawn'], [9, 'day'], [16, 'day'], [18.5, 'dusk'], [20, 'night'], [24, 'night']];
+  function palettesAt(h) {
+    h = ((h % 24) + 24) % 24;
+    for (let i = 0; i < ANCHORS.length - 1; i++) {
+      const [h0, a] = ANCHORS[i], [h1, b] = ANCHORS[i + 1];
+      if (h >= h0 && h <= h1) return { a, b, k: h1 === h0 ? 0 : (h - h0) / (h1 - h0) };
+    }
+    return { a: 'night', b: 'night', k: 0 };
+  }
+
+  const baked = {};
+  function withCanvas(draw) {
     const c = document.createElement('canvas');
     c.width = W; c.height = H;
     const saved = ctx;
     ctx = c.getContext('2d');
-    // 22 bands interpolated from the palette, with a 2-row checker dither on every seam.
-    const bands = 22, bandH = HZ / bands;
-    const colorAt = (i) => { const f = (i / (bands - 1)) * (SKY.length - 1); const k = Math.min(SKY.length - 2, Math.floor(f)); return mix(SKY[k], SKY[k + 1], f - k); };
-    for (let i = 0; i < bands; i++) px(0, i * bandH, W, bandH + 1, colorAt(i));
-    for (let i = 1; i < bands; i++) {
-      const y = Math.round(i * bandH);
-      ctx.fillStyle = colorAt(i);
-      for (let x = 0; x < W; x += 2) ctx.fillRect(x + (i & 1), y - 2, 1, 1);
-      ctx.fillStyle = colorAt(i - 1);
-      for (let x = 0; x < W; x += 2) ctx.fillRect(x + ((i + 1) & 1), y + 1, 1, 1);
-    }
-    // Setting sun: dithered halo, solid glow, disc, and the classic sliced lower half.
-    disc(128, HZ, 62, '#ff9a5a', true);
-    disc(128, HZ, 44, '#ffa868');
-    disc(128, HZ, 30, '#ffe2a0');
-    px(108, HZ - 26, 18, 2, '#fff4d0');
-    for (let k = 0; k < 5; k++) px(96, HZ - 14 + k * 5, 64, 1 + Math.floor(k / 2), '#ffa868');
-    // Far shore: tree line, palms, range buildings, assembly building, water tower.
-    const shore = '#2a0f35';
-    px(0, HZ - 10, W, 12, shore);
-    for (let x = 0; x < W; x += 4) px(x, HZ - 14 + Math.floor(rnd() * 5), 4, 6, shore);
-    const building = (x, w, h, lit) => {
-      px(x, HZ - h, w, h, '#331240'); px(x, HZ - h, 2, h, '#3e1a4c');
-      for (let k = 0; k < lit; k++) px(x + 4 + Math.floor(rnd() * (w - 8)), HZ - h + 4 + Math.floor(rnd() * (h - 10)), 2, 2, '#ffcf6b');
-    };
-    building(380, 26, 22, 3); building(410, 16, 30, 2); building(560, 30, 18, 3);
-    // Big assembly building: tall box with a lighter sunlit face, vertical door slot and a few lit windows.
-    px(470, 188, 76, 76, '#36153f'); px(470, 188, 10, 76, '#43204c'); px(470, 188, 76, 3, '#4a2454');
-    px(500, 200, 14, 64, '#2a0f35'); for (let y = 204; y < 260; y += 6) px(501, y, 12, 1, '#36153f');
-    for (let k = 0; k < 7; k++) px(484 + Math.floor(rnd() * 56), 196 + Math.floor(rnd() * 56), 2, 2, '#ffcf6b');
-    px(596, 214, 6, 50, '#331240'); px(588, 206, 22, 10, '#331240'); px(588, 206, 22, 2, '#43204c'); // water tower
-    const palm = (x, h) => {
-      for (let k = 0; k < h; k++) px(x + Math.round(Math.sin(k / h * 1.6) * 4), HZ - k, 2, 1, shore);
-      const tx = x + Math.round(Math.sin(1.6) * 4), ty = HZ - h;
-      for (const [dx, dy] of [[-10, 4], [10, 4], [-7, -3], [7, -3], [0, -5]]) line(tx, ty, tx + dx, ty + dy, shore);
-    };
-    palm(30, 24); palm(52, 30); palm(612, 26);
+    draw();
     ctx = saved;
     return c;
   }
+  function bakeSky(name) {
+    return withCanvas(() => {
+      const pal = PAL[name].sky;
+      // 22 bands interpolated from the palette, with a 2-row checker dither on every seam.
+      const bands = 22, bandH = HZ / bands;
+      const colorAt = (i) => { const f = (i / (bands - 1)) * (pal.length - 1); const k = Math.min(pal.length - 2, Math.floor(f)); return mix(pal[k], pal[k + 1], f - k); };
+      for (let i = 0; i < bands; i++) px(0, i * bandH, W, bandH + 1, colorAt(i));
+      px(0, HZ, W, H - HZ, pal[pal.length - 1]);
+      for (let i = 1; i < bands; i++) {
+        const y = Math.round(i * bandH);
+        ctx.fillStyle = colorAt(i);
+        for (let x = 0; x < W; x += 2) ctx.fillRect(x + (i & 1), y - 2, 1, 1);
+        ctx.fillStyle = colorAt(i - 1);
+        for (let x = 0; x < W; x += 2) ctx.fillRect(x + ((i + 1) & 1), y + 1, 1, 1);
+      }
+    });
+  }
+  function bakeShore(name) {
+    return withCanvas(() => {
+      const { shore, bld, lit } = PAL[name];
+      seed = 5;
+      px(0, HZ - 10, W, 12, shore);
+      for (let x = 0; x < W; x += 4) px(x, HZ - 14 + Math.floor(rnd() * 5), 4, 6, shore);
+      const building = (x, w, h, n) => {
+        px(x, HZ - h, w, h, bld); px(x, HZ - h, 2, h, mix(bld, '#ffffff', 0.08));
+        for (let k = 0; k < n; k++) px(x + 4 + Math.floor(rnd() * (w - 8)), HZ - h + 4 + Math.floor(rnd() * (h - 10)), 2, 2, lit);
+      };
+      building(380, 26, 22, 3); building(410, 16, 30, 2); building(560, 30, 18, 3);
+      // Big assembly building: tall box, lighter sunlit face, vertical door slot, a few lit windows.
+      px(470, HZ - 76, 76, 76, bld); px(470, HZ - 76, 10, 76, mix(bld, '#ffffff', 0.1)); px(470, HZ - 76, 76, 3, mix(bld, '#ffffff', 0.15));
+      px(500, HZ - 64, 14, 64, shore); for (let y = HZ - 60; y < HZ - 4; y += 6) px(501, y, 12, 1, bld);
+      for (let k = 0; k < 7; k++) px(484 + Math.floor(rnd() * 56), HZ - 68 + Math.floor(rnd() * 56), 2, 2, lit);
+      px(596, HZ - 50, 6, 50, bld); px(588, HZ - 58, 22, 10, bld); px(588, HZ - 58, 22, 2, mix(bld, '#ffffff', 0.12)); // water tower
+      const palm = (x, h) => {
+        for (let k = 0; k < h; k++) px(x + Math.round(Math.sin(k / h * 1.6) * 4), HZ - k, 2, 1, shore);
+        const tx = x + Math.round(Math.sin(1.6) * 4), ty = HZ - h;
+        for (const [dx, dy] of [[-10, 4], [10, 4], [-7, -3], [7, -3], [0, -5]]) line(tx, ty, tx + dx, ty + dy, shore);
+      };
+      palm(30, 24); palm(52, 30); palm(612, 26);
+    });
+  }
+  function bakedLayer(kind, name) {
+    const key = `${kind}:${name}`;
+    if (!baked[key]) baked[key] = kind === 'sky' ? bakeSky(name) : bakeShore(name);
+    return baked[key];
+  }
+  function blendLayers(kind, p) {
+    ctx.drawImage(bakedLayer(kind, p.a), 0, 0);
+    if (p.k > 0 && p.a !== p.b) { ctx.globalAlpha = p.k; ctx.drawImage(bakedLayer(kind, p.b), 0, 0); ctx.globalAlpha = 1; }
+  }
+  const nightness = (p) => (p.a === 'night' ? 1 - p.k : 0) + (p.b === 'night' ? p.k : 0);
 
-  function sky(t) {
-    if (!backdrop) backdrop = bake();
-    ctx.drawImage(backdrop, 0, 0);
-    for (const st of stars) {
-      if (st.y > 120) continue; // only the dark upper sky shows stars at dusk
-      if (Math.sin(t * 2 + st.tw * 20) < -0.4) continue;
-      if (st.tw > 0.93) { px(st.x - 1, st.y, 3, 1, '#ffffff'); px(st.x, st.y - 1, 1, 3, '#ffffff'); } // bright twinkle
-      else px(st.x, st.y, 1, 1, st.tw > 0.6 ? '#ffffff' : '#d8a8e8');
+  // Sun above the horizon from 06:00 to 18:50, along an arc from east (right) to west (left).
+  function sunAt(h) {
+    const f = (h - 6) / 12.85;
+    if (f < 0 || f > 1) return null;
+    return { x: 600 - 500 * f, y: HZ + 10 - Math.sin(Math.PI * f) * 230, low: 1 - Math.sin(Math.PI * f) };
+  }
+  function sunAndMoon(h, env) {
+    const sun = sunAt(h);
+    if (sun) {
+      const glow = sun.low > 0.6;
+      const img = sprite(`sun:${glow}`, 128, 128, () => {
+        if (glow) disc(64, 64, 62, '#ff9a5a', true);
+        disc(64, 64, glow ? 44 : 34, glow ? '#ffa868' : '#fff2c0');
+        disc(64, 64, glow ? 30 : 24, glow ? '#ffe2a0' : '#fffbe8');
+        if (glow) for (let k = 0; k < 5; k++) px(32, 74 + k * 5, 64, 1 + Math.floor(k / 2), '#ffa868'); // sliced sunset
+      });
+      ctx.drawImage(img, Math.round(sun.x) - 64, Math.round(sun.y) - 64);
+    }
+    const mh = ((h - 19.5 + 24) % 24) / 10; // moon up 19:30 to 05:30
+    if (mh <= 1) {
+      const mx = 560 - 480 * mh, my = HZ - 20 - Math.sin(Math.PI * mh) * 200;
+      disc(mx, my, 12, '#e8e4d8'); px(mx - 5, my - 3, 3, 3, '#c8c4b8'); px(mx + 3, my + 2, 4, 3, '#c8c4b8');
     }
   }
+
+  function sky(t, env) {
+    const p = palettesAt(env.hour);
+    blendLayers('sky', p);
+    const night = nightness(p);
+    // Stars fade in at night; at dusk only the darkest upper sky shows a few.
+    const starLimit = night > 0.3 ? 250 : env.hour > 17 || env.hour < 7 ? 120 : 0;
+    for (const st of stars) {
+      if (st.y > starLimit || Math.sin(t * 2 + st.tw * 20) < -0.4) continue;
+      if (st.tw > 0.93) { px(st.x - 1, st.y, 3, 1, '#ffffff'); px(st.x, st.y - 1, 1, 3, '#ffffff'); }
+      else px(st.x, st.y, 1, 1, st.tw > 0.6 ? '#ffffff' : '#d8a8e8');
+    }
+    sunAndMoon(env.hour, env);
+    // Overcast dims the sky before the shore goes on top.
+    const over = OVERCAST[env.kind] || 0;
+    if (over) { ctx.fillStyle = `rgba(60, 54, 80, ${over * 0.6})`; ctx.fillRect(0, 0, W, H); }
+  }
+  const OVERCAST = { sun: 0, cloud: 0.3, wind: 0.2, cold: 0.15, rain: 0.6, storm: 0.85 };
 
   // Sky above the baked backdrop, revealed when the camera follows the rocket up: fades to night.
   function space(t, h) {
@@ -124,36 +213,143 @@ const Render = (function () {
     }
   }
 
-  // Sea between the far shore and the pad, with a shimmering sun reflection.
-  function water(t) {
-    for (let y = HZ + 2; y < 290; y++) px(0, y, W, 1, mix('#7a3a5e', '#2e1640', (y - HZ) / 26));
-    const shift = Math.floor(t * 6);
-    for (let y = HZ + 4; y < 288; y += 3) {
-      for (let x = ((y * 7 + shift) % 24) - 24; x < W; x += 24) px(x, y, 8, 1, 'rgba(255, 170, 160, 0.18)');
-      const w = Math.max(4, 60 - (y - HZ) * 1.6 + Math.sin(t * 3 + y) * 6);
-      px(128 - w / 2 + Math.sin(t * 2 + y) * 3, y, w, 1, (y + shift) % 2 ? '#ff9a5a' : '#ffc27a');
+  // River between the far shore and the pad: sky-coloured gradient, a wobbling mirror image of the
+  // shore (with its lit windows), drifting ripples, a broken sun/moon path, and rain rings.
+  const RIPPLES = [];
+  seed = 300;
+  for (let i = 0; i < 70; i++) RIPPLES.push({ x: rnd() * W, y: HZ + 4 + Math.floor(rnd() * (284 - HZ)), len: 4 + Math.floor(rnd() * 14), v: 2 + rnd() * 6 });
+  function water(t, env) {
+    const p = palettesAt(env.hour);
+    const top = mix(PAL[p.a].sea[0], PAL[p.b].sea[0], p.k), bot = mix(PAL[p.a].sea[1], PAL[p.b].sea[1], p.k);
+    const y0 = HZ + 2, y1 = 289, depth = y1 - y0;
+    for (let y = y0; y < y1; y++) px(0, y, W, 1, mix(top, bot, (y - y0) / depth));
+    // Mirror image of the shore: each water row copies a row of the shore, flipped, with a wave offset.
+    const shore = bakedLayer('shore', p.k < 0.5 ? p.a : p.b);
+    ctx.globalAlpha = 0.45;
+    for (let y = y0; y < y1; y++) {
+      const sy = Math.round(HZ - (y - y0) * 1.6);
+      const wob = Math.round(Math.sin(t * 2.2 + y * 0.9) * (1 + (y - y0) / 8));
+      ctx.drawImage(shore, 0, sy, W, 1, wob, y, W, 1);
+    }
+    ctx.globalAlpha = 1;
+    // Shine along the far edge.
+    px(0, y0, W, 1, mix(top, '#ffffff', 0.35));
+    // Ripples: short highlights drifting with the current, longer near the viewer.
+    const glint = mix(top, '#ffffff', 0.4);
+    for (const r of RIPPLES) {
+      const x = ((r.x + t * r.v) % (W + 30)) - 15;
+      const near = (r.y - y0) / depth;
+      px(x, r.y, Math.round(r.len * (0.6 + near)), 1, glint);
+      if (near > 0.6) px(x + 3, r.y + 1, Math.round(r.len * 0.5), 1, mix(bot, '#000000', 0.2));
+    }
+    // Sun (or moon) path: broken, shimmering bands under a low sun or the moon.
+    const sun = sunAt(env.hour);
+    const over = OVERCAST[env.kind] || 0;
+    if (over < 0.5 && sun && sun.low > 0.45) {
+      for (let y = y0 + 2; y < y1; y += 2) {
+        const w = Math.max(3, 70 - (y - y0) * 1.8 + Math.sin(t * 3 + y) * 8);
+        const seg = 3 + Math.floor(Math.abs(Math.sin(y * 1.7 + t * 4)) * 4);
+        for (let k = 0; k < seg; k++) {
+          const sx = sun.x - w / 2 + (k + 0.5) * (w / seg) + Math.sin(t * 2 + y + k) * 3;
+          px(sx - 3, y, 5 + ((y + k) % 3), 1, (y + k) % 4 ? '#ffb070' : '#ffe2a0');
+        }
+      }
+    } else if (nightness(p) > 0.5) {
+      const mh = ((env.hour - 19.5 + 24) % 24) / 10;
+      if (mh <= 1) { const mx = 560 - 480 * mh; for (let y = y0 + 2; y < y1; y += 3) px(mx - 6 + Math.sin(t * 2 + y) * 3, y, 10 - (y - y0) / 4, 1, '#c8c4b8'); }
+    }
+    // Rain rings expanding on the surface.
+    if (env.kind === 'rain' || env.kind === 'storm') {
+      for (let i = 0; i < 24; i++) {
+        const ph = (t * 1.5 + i * 0.37) % 1;
+        const rx = (i * 137.5) % W, ry = y0 + 3 + (i * 7) % (depth - 4);
+        const rw = Math.round(2 + ph * 10);
+        ctx.globalAlpha = 0.6 * (1 - ph);
+        px(rx - rw, ry, 2, 1, '#e6ecf6'); px(rx + rw - 2, ry, 2, 1, '#e6ecf6'); px(rx - rw + 2, ry - 1, rw * 2 - 4, 1, '#e6ecf6');
+        ctx.globalAlpha = 1;
+      }
     }
   }
 
-  function ground() {
-    px(0, 290, W, H - 290, '#22132f');
+  // Rain streaks slanted by the wind; storms add lightning flashes with a forked bolt.
+  function precipitation(t, env) {
+    if (env.kind !== 'rain' && env.kind !== 'storm') return;
+    const n = env.kind === 'storm' ? 220 : 120;
+    const slant = Math.min(10, env.wind || 3);
+    ctx.fillStyle = 'rgba(200, 210, 240, 0.45)';
+    for (let i = 0; i < n; i++) {
+      const x = ((i * 97.3 + t * 40 * slant) % (W + 40)) - 20;
+      const y = ((i * 53.7 + t * 520) % (H + 20)) - 20;
+      for (let k = 0; k < 3; k++) ctx.fillRect(Math.round(x + k * slant * 0.3), Math.round(y + k * 4), 1, 4);
+    }
+    if (env.kind === 'storm') {
+      const cycle = t * 0.7, phase = cycle % 3;
+      if (phase < 0.12) {
+        ctx.fillStyle = `rgba(230, 230, 255, ${0.5 - phase * 3})`; ctx.fillRect(0, 0, W, H);
+        let bx = 80 + ((Math.floor(cycle / 3) * 211) % 480), by = 0;
+        while (by < HZ) { const nx = bx + ((by * 7) % 23) - 11; line(bx, by, nx, by + 18, '#ffffff'); line(bx + 1, by, nx + 1, by + 18, '#c8d0ff'); bx = nx; by += 18; }
+      }
+    }
+  }
+
+  // Wind sock on the tower top: stiff and horizontal in strong wind, limp when calm.
+  function windsock(t, env) {
+    const wind = env.wind || 2;
+    const lift = Math.min(1, wind / 10);
+    const ang = Math.PI / 2 - lift * (Math.PI / 2 - 0.15) + Math.sin(t * (2 + wind)) * 0.08 * lift;
+    const x0 = 228, y0 = 50;
+    px(x0 - 1, y0, 2, 16, '#5c6274');
+    for (let k = 0; k < 5; k++) {
+      const r = 3 + k * 4;
+      px(x0 - Math.sin(ang) * r - 2, y0 + Math.cos(ang) * r - 2, 4, 4, k % 2 ? '#ffffff' : '#ff6a3a');
+    }
+  }
+
+  function ground(env) {
+    const p = palettesAt(env.hour);
+    const kq = q(p.k);
+    const dark = q(nightness(p) + (env.hour > 17 && env.hour < 20 ? 0.5 : 0));
+    ctx.drawImage(sprite(`ground:${p.a}:${p.b}:${kq}:${dark}`, W, H, () => groundStatic({ a: p.a, b: p.b, k: kq }, dark)), 0, 0);
+  }
+  function groundStatic(p, dark) {
+    const g0 = mix(PAL[p.a].ground[0], PAL[p.b].ground[0], p.k), g1 = mix(PAL[p.a].ground[1], PAL[p.b].ground[1], p.k);
+    const grass = mix(PAL[p.a].grass, PAL[p.b].grass, p.k);
+    for (let y = 290; y < H; y += 2) px(0, y, W, 2, mix(g0, g1, (y - 290) / (H - 290)));
     seed = 11;
-    for (let i = 0; i < 260; i++) px(Math.floor(rnd() * W), 292 + Math.floor(rnd() * 68), 2, 1, i % 3 ? '#2c1a3c' : '#1a0d26');
-    // Crawler road: gravel strip widening toward the viewer.
+    for (let i = 0; i < 320; i++) px(Math.floor(rnd() * W), 292 + Math.floor(rnd() * 68), 2, 1, i % 3 ? mix(g0, '#ffffff', 0.06) : mix(g1, '#000000', 0.2));
+    // Shoreline: grass tufts and reeds along the water's edge.
+    px(0, 288, W, 3, grass);
+    for (let x = 2; x < W; x += 5) { const h = 2 + Math.floor(rnd() * 5); px(x, 289 - h, 1, h, grass); if (h > 4) px(x + 1, 287 - h, 1, 2, mix(grass, '#ffffff', 0.15)); }
+    // Pools of light under the floodlights at dusk and night.
+    if (dark > 0.2) for (const x of [60, 600]) {
+      ctx.globalAlpha = Math.min(0.5, dark * 0.4);
+      for (let r = 0; r < 3; r++) { ctx.fillStyle = '#fff2c4'; for (let dx = -60 + r * 12; dx <= 60 - r * 12; dx += 2) ctx.fillRect(x + dx + (r & 1), 292 + r * 3, 1, 6 - r); }
+      ctx.globalAlpha = 1;
+    }
+    // Crawler road: gravel strip widening toward the viewer, with edge lines.
     for (let y = 316; y < H; y++) {
       const half = 26 + (y - 316) * 1.4;
-      px(RX - half, y, half * 2, 1, '#2f1d3e');
-      if (y % 3 === 0) for (let x = RX - half + (y % 6); x < RX + half; x += 7) px(x, y, 1, 1, '#45305a');
+      px(RX - half, y, half * 2, 1, mix(g0, '#8a7a9a', 0.25));
+      px(RX - half, y, 2, 1, mix(g0, '#ffffff', 0.25)); px(RX + half - 2, y, 2, 1, mix(g0, '#ffffff', 0.25));
+      if (y % 3 === 0) for (let x = RX - half + (y % 6); x < RX + half; x += 7) px(x, y, 1, 1, mix(g0, '#ffffff', 0.18));
     }
+    // Fence posts along the pad perimeter.
+    for (let x = 150; x < 196; x += 9) { px(x, 296, 2, 10, '#3a3046'); }
+    for (let x = 486; x < 540; x += 9) { px(x, 296, 2, 10, '#3a3046'); }
+    px(150, 299, 46, 1, '#5a4a66'); px(486, 299, 54, 1, '#5a4a66');
     // Pad: top surface, edge highlight, hazard-striped front, flame trench opening.
     px(196, 290, 288, 10, '#6a5a7a'); px(196, 290, 288, 1, '#a48eb0');
+    for (let x = 206; x < 480; x += 24) px(x, 292, 1, 7, '#5a4a6a'); // concrete slab joints
     px(196, 300, 288, 18, '#3e3050');
     for (let x = 196; x < 484; x += 8) for (let k = 0; k < 4; k++) px(x + k, 300 + k, 4, 1, '#e8b030');
     px(196, 304, 288, 1, '#2a1f38');
     px(310, 300, 60, 18, '#0e0816'); px(310, 300, 60, 2, '#241a30');
-    // Hold-down posts and plumbing on the pad.
+    // Hold-down posts, plumbing and a propellant tank on the pad.
     px(RX - 26, 282, 6, 8, '#8a7a96'); px(RX + 20, 282, 6, 8, '#6a5a7a');
     px(222, 280, 4, 10, '#4a3a5a'); px(214, 276, 20, 4, '#5a4a6a');
+    px(430, 268, 30, 22, '#c8c0d0'); px(430, 268, 30, 3, '#ece6f0'); px(456, 268, 4, 22, '#9a90a8'); // spherical-ish tank
+    px(434, 262, 22, 6, '#c8c0d0'); px(440, 258, 10, 4, '#c8c0d0');
+    px(420, 284, 12, 2, '#5a4a6a');
   }
 
   // Light towers with lamp heads; beams sweep slowly across the rocket.
@@ -169,17 +365,57 @@ const Render = (function () {
     });
   }
 
-  // Slow clouds made of pixel puffs, lit pink from below by the sun.
-  function clouds(t) {
-    for (let i = 0; i < 5; i++) {
-      const w = 70 + i * 26;
-      const x = ((t * (4 + i * 1.5) + i * 173) % (W + w * 2)) - w;
-      const y = 50 + i * 26;
-      for (let k = 0; k < 4; k++) disc(x + k * (w / 4) + 10, y - (k % 2 ? 6 : 2), 9 + (k % 2) * 4, '#5a2462');
-      px(x + 4, y, w, 7, '#5a2462');
-      px(x + 8, y + 5, w - 8, 2, '#ff8a7a');
-      px(x + 16, y - 10, w / 3, 1, '#7a3a7e');
+  // Clouds: puffy cumulus built from a few overlapping puffs with a flat base, shaded top to bottom
+  // (bright top, body, darker base). Low sun lights the base. Far layer: small, faint, slow.
+  const CLOUD_SHAPES = [];
+  for (let i = 0; i < 12; i++) {
+    seed = 101 + i * 7;
+    const w = 90 + Math.floor(rnd() * 80);
+    const puffs = [];
+    // Puffs grow toward the middle so each cloud has a rounded, piled-up top.
+    for (let x = 10; x < w - 10; x += 12 + Math.floor(rnd() * 8)) {
+      const mid = 1 - Math.abs(x / w - 0.5) * 2;
+      puffs.push([x, Math.round(8 + mid * 12 + rnd() * 5)]);
     }
+    CLOUD_SHAPES.push({ w, puffs });
+  }
+  // Cloud sprite: origin 6 px in from the left and 50 px down from the top (the cloud's flat base line).
+  function cloudSprite(index, body, top, base, lit) {
+    const shape = CLOUD_SHAPES[index];
+    return sprite(`cloud:${index}:${body}:${top}:${base}:${lit}`, shape.w + 12, 56, () => cloudShape(6, 50, shape, body, top, base, lit));
+  }
+  function cloudShape(x, y, shape, body, top, base, lit) {
+    const { w, puffs } = shape;
+    for (const [cx, r] of puffs) disc(x + cx, y - r * 0.6, r, base);           // base shadow
+    for (const [cx, r] of puffs) disc(x + cx, y - r * 0.6 - 2, r - 1, body);   // body
+    for (const [cx, r] of puffs) disc(x + cx - 2, y - r * 0.6 - 4, Math.max(2, r - 5), top); // highlight
+    px(x + 2, y - 2, w - 4, 4, base);                                         // flat bottom
+    px(x + 4, y + 2, w - 8, 1, lit);                                          // underside light
+  }
+  function clouds(t, env, layerIndex, flight) {
+    const over = OVERCAST[env.kind] || 0;
+    const far = layerIndex === 0;
+    const n = (far ? 4 : 3) + Math.round(over * (far ? 3 : 5));
+    const speed = (far ? 0.5 : 1) * (1 + Math.min(3, (env.wind || 2) / 4));
+    const p = palettesAt(env.hour);
+    const tint = mix(PAL[p.a].cloud, PAL[p.b].cloud, q(p.k));
+    const body = mix(tint, '#4a4a5c', over);
+    const top = mix(body, '#ffffff', far ? 0.12 : 0.28), base = mix(body, '#000000', 0.25);
+    const sun = sunAt(env.hour);
+    const lit = sun && sun.low > 0.6 && over < 0.5 ? '#ff9a7a' : mix(body, '#ffffff', 0.1);
+    if (far) ctx.globalAlpha = 0.7;
+    for (let i = 0; i < n; i++) {
+      const index = (i * 5 + (far ? 3 : 0)) % CLOUD_SHAPES.length;
+      const shape = CLOUD_SHAPES[index];
+      const w = shape.w * (far ? 0.7 : 1);
+      const x = ((t * (3 + (i % 4) * 1.4) * speed + i * 211 + (far ? 97 : 0)) % (W + w * 2)) - w;
+      // In flight the near clouds start above the screen and sweep down past the climbing rocket.
+      const y = far ? 50 + (i * 29) % 70 : flight ? -160 - i * 170 : 110 + (i * 47) % 90;
+      const img = cloudSprite(index, body, top, base, lit);
+      const sc = far ? 0.7 : 1;
+      ctx.drawImage(img, Math.round(x - 6 * sc), Math.round(y - 50 * sc), Math.round(img.width * sc), Math.round(img.height * sc));
+    }
+    ctx.globalAlpha = 1;
   }
 
   // Fault alarm: red wash and a rotating beacon beam from the tower top.
@@ -199,19 +435,8 @@ const Render = (function () {
   function tower(t, s, armOut) {
     const x0 = 244, x1 = 270, top = 68;
     const red = '#a8383a', redLo = '#5a1c2c', redHi = '#d0584a';
-    // Legs and decks.
-    px(x0, top, 3, BASE - top, red); px(x0, top, 1, BASE - top, redHi);
-    px(x1, top, 3, BASE - top, redLo);
-    for (let y = top; y < BASE - 4; y += 16) {
-      px(x0, y, x1 - x0 + 3, 3, red); px(x0, y, x1 - x0 + 3, 1, redHi);
-      line(x0 + 3, y + 3, x1 - 1, y + 15, redLo); line(x1 - 1, y + 3, x0 + 3, y + 15, redLo); // X brace
-    }
-    // Hammerhead crane with a hanging cable and hook.
-    px(228, top - 6, 76, 4, red); px(228, top - 6, 76, 1, redHi);
-    line(300, top - 2, 300, 96, '#3a3454'); px(298, 96, 5, 3, '#5a5274');
-    line(257, top - 6, 232, top - 2, redLo);
-    // Lightning mast and beacon.
-    px(257, 24, 2, top - 30, '#5c6274');
+    ctx.drawImage(sprite('tower', W, H, towerFrame), 0, 0);
+    // Lightning-mast beacon: blinks, fast during an alarm.
     const alarm = s.active !== null;
     const beaconOn = alarm ? Math.floor(t * 6) % 2 === 0 : Math.floor(t * 1.2) % 2 === 0;
     px(255, 18, 6, 6, beaconOn ? '#ff4a4a' : '#4a1c1c');
@@ -227,6 +452,23 @@ const Render = (function () {
       line(x1 + 3 + len * 0.9, 217, x1 + 3 + len, 226, '#3a3454');
     }
   }
+  function towerFrame() {
+    const x0 = 244, x1 = 270, top = 68;
+    const red = '#a8383a', redLo = '#5a1c2c', redHi = '#d0584a';
+    // Legs and decks.
+    px(x0, top, 3, BASE - top, red); px(x0, top, 1, BASE - top, redHi);
+    px(x1, top, 3, BASE - top, redLo);
+    for (let y = top; y < BASE - 4; y += 16) {
+      px(x0, y, x1 - x0 + 3, 3, red); px(x0, y, x1 - x0 + 3, 1, redHi);
+      line(x0 + 3, y + 3, x1 - 1, y + 15, redLo); line(x1 - 1, y + 3, x0 + 3, y + 15, redLo); // X brace
+    }
+    // Hammerhead crane with a hanging cable and hook.
+    px(228, top - 6, 76, 4, red); px(228, top - 6, 76, 1, redHi);
+    line(300, top - 2, 300, 96, '#3a3454'); px(298, 96, 5, 3, '#5a5274');
+    line(257, top - 6, 232, top - 2, redLo);
+    // Lightning mast.
+    px(257, 24, 2, top - 30, '#5c6274');
+  }
 
   // One horizontal slice of a round body, shaded from the sunset side (left) to the shadow side (right).
   function shadedRow(y, cx, w, h, tone) {
@@ -241,6 +483,9 @@ const Render = (function () {
   }
 
   function rocket(y) {
+    ctx.drawImage(sprite('rocket', W, H, () => rocketShape(0)), 0, Math.round(y));
+  }
+  function rocketShape(y) {
     const L = RX - 17, R = RX + 17;
     // Launch escape tower.
     px(RX - 1, y + 50, 2, 22, '#c8ccd6');
@@ -349,6 +594,10 @@ const Render = (function () {
   }
 
   function flame(t, y, power) {
+    // Hot glow around the nozzles.
+    ctx.globalAlpha = 0.5;
+    disc(RX, y + BASE + 6, Math.round(26 + 6 * Math.sin(t * 30)), '#ffb547', true);
+    ctx.globalAlpha = 1;
     // Outer layer first, hotter cores on top; each layer tapers to a point.
     const layers = [['#ff5a24', 30, 84], ['#ffb547', 22, 64], ['#ffe9a8', 14, 42], ['#ffffff', 8, 22]];
     layers.forEach(([c, w, l], i) => {
@@ -382,14 +631,19 @@ const Render = (function () {
     ctx.globalAlpha = 1;
   }
 
-  // Smoke column the rocket leaves behind once it climbs.
-  function trail(t, y) {
-    for (let k = 0; k < 30; k++) {
-      const ty = y + BASE + 40 + k * 16;
-      if (ty > BASE + 20) break;
-      const r = Math.round(8 + k * 0.9 + Math.sin(t * 3 + k) * 2);
-      ctx.globalAlpha = Math.max(0.1, 0.6 - k * 0.015);
-      disc(RX + Math.sin(k * 1.7) * 3, ty, r, '#d2ccdc');
+  // Exhaust trail: a thick column from the rocket all the way down to the pad. Older smoke (further down)
+  // is wider and fainter and drifts with the wind.
+  function trail(t, y, cam, wind) {
+    const from = y + BASE + 70, to = BASE + 10;
+    for (let wy = from, k = 0; wy < to; wy += 10, k++) {
+      if (wy + cam < -40 || wy + cam > H + 40) continue; // off screen
+      const d = wy - from;
+      const r = Math.round(Math.min(36, 9 + d * 0.05) + Math.sin(t * 2 + k) * 2);
+      const x = RX + Math.sin(k * 1.3) * 3 + d * 0.015 * (wind || 2);
+      ctx.globalAlpha = Math.max(0.15, 0.75 - d / 900);
+      disc(x + 3, wy + 3, r, '#9a90ac');
+      disc(x, wy, r - 1, '#d8d2e2');
+      disc(x - Math.round(r * 0.35), wy - Math.round(r * 0.35), Math.max(2, Math.round(r * 0.4)), '#f2eef6');
     }
     ctx.globalAlpha = 1;
   }
@@ -528,13 +782,18 @@ const Render = (function () {
   let FAILURES_REF = {};
 
   // liftoff: seconds since ignition, or -1 when not launching. Liftoff itself starts 2 s after ignition.
-  function draw(context, s, t, failures, liftoff) {
+  // env: { hour, kind, wind } for time of day and weather. Default: a calm dusk, the launch hour.
+  function draw(context, s, t, failures, liftoff, env = DUSK) {
     ctx = context;
+    ctx.imageSmoothingEnabled = false;
     FAILURES_REF = failures;
     const rise = liftoff > 2 ? 12 * (liftoff - 2) * (liftoff - 2) : 0;
     const y = -rise;
-    // Camera follows the rocket once it clears the tower; the ground drops away below.
-    const cam = Math.max(0, rise - 40);
+    // Camera follows the rocket (keeping it whole on screen) until FOLLOW_END, then holds still so the
+    // rocket climbs out of the top of the frame, leaving its trail behind.
+    const FOLLOW_END = 6.5;
+    const follow = (lt) => (lt > 2 ? 12 * (lt - 2) * (lt - 2) : 0);
+    const cam = Math.max(0, Math.min(rise, follow(FOLLOW_END)) - 30);
     ctx.save();
     const shakeAmp = liftoff >= 0 ? Math.max(0, 6 - liftoff * 0.8) : 0;
     ctx.translate(Math.round(Math.sin(t * 60) * shakeAmp), Math.round(Math.cos(t * 47) * shakeAmp * 0.5));
@@ -543,39 +802,71 @@ const Render = (function () {
     const far = Math.round(cam * 0.5);
     ctx.save();
     ctx.translate(0, far);
-    sky(t);
+    sky(t, env);
     ctx.restore();
     if (far > 0) space(t, far);
     ctx.save();
-    ctx.translate(0, Math.round(cam * 0.7));
-    clouds(t);
+    ctx.translate(0, Math.round(cam * 0.6));
+    clouds(t, env, 0);
+    if (liftoff < 0) clouds(t, env, 1); // on the ground the near clouds stay behind the rocket
     ctx.restore();
     ctx.save();
     ctx.translate(0, Math.round(cam));
-    water(t);
-    ground();
+    blendLayers('shore', palettesAt(env.hour));
+    water(t, env);
+    ground(env);
     floodlights(t);
     tower(t, s, liftoff >= 0 ? Math.max(0, 1 - liftoff / 1.5) : 1);
     towerLamps(t, s);
+    windsock(t, env);
     if (liftoff >= 0) {
       smoke(liftoff);
-      if (liftoff > 2) trail(t, y);
-      flame(t, y, Math.min(1, liftoff / 1.5) + (liftoff > 2 ? 0.6 : 0));
+      if (liftoff > 2) trail(t, y, cam, env.wind);
+      flame(t, y, Math.min(1, liftoff / 1.5) + (liftoff > 2 ? Math.min(1, 0.6 + (liftoff - 2) * 0.1) : 0));
     }
     if (liftoff < 0 && s.checking > 0) rocketScanned(t, s, y);
     else rocket(y);
     if (liftoff < 0) failureFx(t, s, y);
     ctx.restore();
+    // Near cloud layer in front of the pad, moving with the camera a little faster than the far layer.
+    if (liftoff >= 0) { // in flight, near clouds sweep down past the rocket, faster than the camera
+      ctx.save();
+      ctx.translate(0, Math.round(cam * 1.4));
+      clouds(t, env, 1, true);
+      ctx.restore();
+    }
     // Engine glow lights the whole scene at ignition.
     if (liftoff >= 0) {
       ctx.fillStyle = `rgba(255, 170, 80, ${Math.max(0, 0.25 - Math.max(0, liftoff - 3) * 0.04)})`;
       ctx.fillRect(0, 0, W, H);
     }
+    precipitation(t, env);
+    const night = nightness(palettesAt(env.hour));
+    if (night > 0) { ctx.fillStyle = `rgba(4, 2, 20, ${0.45 * night})`; ctx.fillRect(0, 0, W, H); } // the world darkens at night
     alarmFx(t, s);
     ctx.restore();
   }
 
-  return { draw, lampState, icon, portrait, W, H };
+  // 16x16 weather icons for the forecast cards.
+  function weatherIcon(context, kind) {
+    const p = (x, y, w, h, c) => { context.fillStyle = c; context.fillRect(x, y, w, h); };
+    context.clearRect(0, 0, 16, 16);
+    const cloud = (y, c) => { p(3, y + 2, 10, 4, c); p(5, y, 4, 2, c); p(9, y + 1, 3, 1, c); p(2, y + 3, 1, 2, c); p(13, y + 3, 1, 2, c); };
+    if (kind === 'sun' || kind === 'cold') {
+      p(5, 5, 6, 6, kind === 'cold' ? '#c8e4ff' : '#ffd34d'); p(6, 4, 4, 8, kind === 'cold' ? '#c8e4ff' : '#ffd34d'); p(4, 6, 8, 4, kind === 'cold' ? '#c8e4ff' : '#ffd34d');
+      for (const [x, y] of [[7, 0], [7, 14], [0, 7], [14, 7], [2, 2], [12, 2], [2, 12], [12, 12]]) p(x, y, 2, 2, kind === 'cold' ? '#8ac0ff' : '#ff9a3d');
+    } else if (kind === 'cloud') { p(9, 2, 5, 5, '#ffd34d'); cloud(5, '#e6ecf6'); p(3, 10, 10, 1, '#a8b0c8'); }
+    else if (kind === 'wind') { for (const [y, w] of [[4, 11], [8, 14], [12, 9]]) { p(1, y, w, 2, '#c8e4ff'); p(w, y - 2, 2, 2, '#c8e4ff'); } }
+    else {
+      cloud(1, kind === 'storm' ? '#6a6480' : '#a8b0c8');
+      for (const x of [4, 8, 12]) p(x, 10, 1, 3, '#6fe3ff');
+      if (kind === 'storm') { p(8, 8, 2, 3, '#ffd34d'); p(6, 11, 3, 2, '#ffd34d'); p(6, 13, 2, 3, '#ffd34d'); }
+    }
+  }
+
+  const DUSK = { hour: 18.5, kind: 'sun', wind: 3 };
+
+  return { draw, lampState, icon, portrait, weatherIcon, palettesAt, sunAt, W, H };
 })();
 
 if (typeof module !== 'undefined') module.exports = Render;

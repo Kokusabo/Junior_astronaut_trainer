@@ -469,4 +469,60 @@ LEVELS.forEach((_, i) => {
   assert.ok(wins >= 105, 'full mission too hard for a good player');
 }
 
+// Launch weather: simplified launch rules, real-data window picking, waiting costs and the bad-weather gamble.
+{
+  const Weather = require('../src/weather.js');
+  const d = Weather.dayFromPower;
+  assert.equal(d('x', 3, 0, 25).go, true);
+  assert.equal(d('x', 8, 0, 25).kind, 'cloud');
+  assert.equal(d('x', 3, 25, 25).kind, 'storm');
+  assert.equal(d('x', 3, 25, 25).risk, 0.9);
+  assert.equal(d('x', 3, 5, 25).kind, 'rain');
+  assert.ok(d('x', 3, 5, 25).risk >= 0.4 && d('x', 3, 60, 25).risk <= 0.9);
+  assert.equal(d('x', 12, 0, 25).kind, 'wind');
+  assert.equal(d('x', 3, 0, 2).kind, 'cold');
+  assert.equal(d('x', 12, 0, 25).go, false);
+
+  // Saved real NASA POWER copy parses, and every picked window is 7 consecutive days with 2-4 GO days.
+  const days = Weather.parsePower(require('../data/power-ksc.js'));
+  assert.ok(days.length >= 30, 'saved weather copy has enough days');
+  assert.deepEqual(Weather.parsePower(null), []);
+  let seed = 9;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let k = 0; k < 50; k++) {
+    const w = Weather.pickWindow(days, rnd);
+    assert.equal(w.length, 7);
+    const go = w.filter((x) => x.go).length;
+    assert.ok(go >= 2 && go <= 4, `window has ${go} GO days`);
+    for (let i = 1; i < 7; i++) assert.ok(new Date(w[i].date) - new Date(w[i - 1].date) === 864e5, 'days are consecutive');
+  }
+
+  // Waiting: more prep time, higher fault chance, carried to every stage.
+  const base = Game.start(LEVELS, 1, 1);
+  const waited = Game.start(LEVELS, 1, 1, [], { stability: 100, fuel: 88, waited: 3, day: d('x', 3, 0, 25) });
+  assert.equal(waited.cfg.countdown, base.cfg.countdown + 3 * Game.WAIT.countdownPerDay);
+  assert.ok(Math.abs(waited.cfg.failureChance - base.cfg.failureChance - 3 * Game.WAIT.failurePerDay) < 1e-9);
+  assert.equal(LEVELS[1].countdown, base.cfg.countdown, 'level data itself is not changed');
+
+  // Final launch: GO weather always launches; storm weather loses the rocket about 90% of the time.
+  const launchOn = (day, sd) => {
+    const s = Game.start(LEVELS, LEVELS.length - 1, sd, [], { stability: 100, fuel: 100, waited: 0, day });
+    for (const id of Object.keys(s.systems)) s.systems[id] = 'ok';
+    Game.requestLaunch(s);
+    return s;
+  };
+  for (let sd = 1; sd <= 50; sd++) assert.equal(launchOn(d('x', 3, 0, 25), sd).status, 'won');
+  let lost = 0;
+  for (let sd = 1; sd <= 400; sd++) {
+    const s = launchOn(d('x', 3, 30, 25), sd);
+    if (s.status === 'lost') { lost++; assert.ok(s.reason.includes('bad weather')); } else assert.ok(s.lucky);
+  }
+  assert.ok(lost > 320 && lost < 395, `storm launch lost ${lost}/400`);
+  // Earlier levels ignore the launch weather.
+  const early = Game.start(LEVELS, 0, 1, [], { stability: 100, fuel: 100, waited: 0, day: d('x', 3, 30, 25) });
+  for (const id of Object.keys(early.systems)) early.systems[id] = 'ok';
+  Game.requestLaunch(early);
+  assert.equal(early.status, 'won');
+}
+
 console.log('All first-mission tests passed.');

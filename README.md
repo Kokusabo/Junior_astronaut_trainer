@@ -7,7 +7,9 @@ get a GO before the countdown runs out. Three levels, each with its own checklis
 
 ## Play
 
-Open `index.html` in a browser. No install, no build step, no server needed.
+Open `index.html` in a browser for mission 1 (Earth: get the rocket ready and launch).
+Open `moon.html` for mission 2 (Moon: plan the trip, in progress).
+No install, no build step, no server needed.
 
 ## NASA data
 
@@ -17,6 +19,14 @@ On start the game loads real NASA data, and uses it for random events and facts:
 - Severe storms from NASA EONET
 - Spaceflight studies from NASA OSDR (falls back to a saved copy in `data/` when the browser
   blocks the live request)
+- Launch weather at Kennedy Space Center from NASA POWER (saved copy: `tools/power-snapshot.js`)
+- Mission 2: real Earth-Moon distance from NASA JPL Horizons (saved copy: `tools/horizons-snapshot.js`)
+  and landing-site photos from the NASA Image and Video Library
+- Mission 2 launch: steer the gravity turn, fly through Max Q, separate the stages, reach orbit (`src/launch.js`, test shortcut `moon.html#launch`)
+- Mission 2 Earth orbit: the trans-lunar injection burn in the right window, real two-body gravity (`src/tli.js`, test shortcut `moon.html#orbit`)
+- Mission 2 real NASA extras: EPIC photo of Earth today (DSCOVR), the strongest solar flare of the month (DONKI) sets the storm strength, the closest asteroid flyby (JPL), real LRO LOLA elevation shapes the landing hills (saved copy: `tools/moon-nasa-snapshot.js`)
+- Mission 2 landing: lidar hazard scan, landing point marker, the Apollo 11 1202 alarm and fuel callouts (`src/landing.js`, test shortcut `moon.html#landing=shackleton`)
+- Mission 2 flight Earth: NASA GIBS maps (Blue Marble, Black Marble city lights, and yesterday's MODIS Terra clouds, fetched live; saved copy: `tools/earth-snapshot.js`)
 
 The DONKI request needs a free key from https://api.nasa.gov. Copy `src/config.example.js` to
 `src/config.js` and put your key there. `src/config.js` is git-ignored, so the key stays private.
@@ -30,6 +40,7 @@ To refresh the saved OSDR copy: save
 
 ```
 node test/game.test.js
+node test/moon.test.js
 ```
 
 Needs Node.js. Covers game rules, every mini-game, and balance (a simulated good player).

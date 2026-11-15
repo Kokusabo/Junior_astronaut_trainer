@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mission 2: To the Moon</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="fit-screen">
+  <main class="game moon">
+    <header class="topbar">
+      <div>
+        <h1 class="px">Mission 2: To the Moon</h1>
+        <p id="level-name" class="px">Plan the trip: the landing site and the cargo share one fuel tank</p>
+      </div>
+      <div class="top-btns">
+        <button id="back-btn" class="icon-btn px">Mission 1</button>
+        <button id="mute-btn" class="icon-btn px" aria-label="Toggle sound">SOUND ON</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <div class="col-main">
+        <div class="scene-wrap">
+          <canvas id="map" width="640" height="360" aria-label="Map of the near side of the Moon with landing sites"></canvas>
+          <div class="scene-timer"><span class="px">EARTH-MOON</span><strong id="dist" class="timer px">-</strong></div>
+        </div>
+
+        <section id="site-card" class="site-card" hidden>
+          <img id="site-photo" alt="" hidden>
+          <div class="site-info">
+            <p id="site-name" class="px"></p>
+            <p id="site-region" class="px"></p>
+            <ul id="site-stats" class="site-stats"></ul>
+            <p id="site-fact" class="pxw"></p>
+          </div>
+        </section>
+
+        <section class="radio" aria-live="polite">
+          <canvas id="portrait" width="48" height="48" aria-hidden="true"></canvas>
+          <div class="radio-body">
+            <p class="radio-who px">FLIGHT CONTROL · CH 2</p>
+            <p id="radio"></p>
+            <canvas id="radio-canvas" width="1" height="1" aria-hidden="true"></canvas>
+          </div>
+        </section>
+      </div>
+
+      <div class="col-mid">
+        <section class="site-panel">
+          <h2 class="px">Landing site</h2>
+          <div id="site-list" class="site-list"></div>
+        </section>
+
+        <section class="budget">
+          <h2 class="px">Fuel budget</h2>
+          <div class="stat">
+            <span class="stat-label px">Cargo mass</span>
+            <div class="bar"><div id="mass-bar" class="fill"></div></div>
+            <p id="mass-text" class="px budget-num"></p>
+          </div>
+          <div class="stat">
+            <span class="stat-label px">Lander fuel</span>
+            <div class="fuel-stack" id="fuel-stack">
+              <div id="fuel-site" class="seg seg-site"></div>
+              <div id="fuel-cargo" class="seg seg-cargo"></div>
+              <div class="seg-reserve"></div>
+            </div>
+            <p id="fuel-text" class="pxw budget-num"></p>
+            <p class="pxw fuel-legend">ORANGE: TRIP. PINK: CARGO. STRIPES: LANDING RESERVE. 8% MORE IS KEPT FOR BURNS ON THE WAY.</p>
+          </div>
+          <p id="budget-status" class="pxw"></p>
+          <button id="launch-btn" class="primary px" disabled>Launch to the Moon</button>
+        </section>
+      </div>
+
+      <div class="col-side">
+        <section id="flight-panel" class="flight-panel" hidden>
+          <h2 class="px">Flight to the Moon</h2>
+          <p id="flight-text" class="pxw"></p>
+          <div class="flight-btns">
+            <button id="burn-btn" class="primary px">Hold to BURN</button>
+            <button id="shelter-btn" class="px">SHELTER</button>
+            <button id="patch-btn" class="px">PATCH</button>
+          </div>
+          <p class="pxw flight-keys">Tip: the Space key works too (hold it for the burn).</p>
+          <ul id="flight-log" class="flight-log"></ul>
+          <div class="flight-end" hidden>
+            <button id="land-btn" class="primary px">Begin landing</button>
+            <button id="replan-btn" class="px">Plan again</button>
+          </div>
+        </section>
+
+        <section id="launch-panel" class="flight-panel" hidden>
+          <h2 class="px">Launch</h2>
+          <p id="launch-text" class="pxw"></p>
+          <div class="land-pad launch-pad">
+            <button id="up-btn" class="px">UP</button>
+            <button id="stage-btn" class="primary px">STAGE</button>
+            <button id="down-btn" class="px">DOWN</button>
+          </div>
+          <p class="pxw flight-keys launch-keys">Keys: UP and DOWN steer, SPACE = stage</p>
+          <div class="launch-end" hidden>
+            <button id="tli-btn" class="primary px">Next: Earth orbit</button>
+            <button id="relaunch-btn" class="px">Launch again</button>
+            <button id="replan3-btn" class="px">Plan again</button>
+          </div>
+        </section>
+
+        <section id="orbit-panel" class="flight-panel" hidden>
+          <h2 class="px">Earth orbit</h2>
+          <p id="orbit-text" class="pxw"></p>
+          <button id="burn-tli-btn" class="primary px go-btn">Hold to BURN</button>
+          <p class="pxw flight-keys orbit-keys">Key: hold SPACE to burn</p>
+          <div class="orbit-end launch-end" hidden>
+            <button id="coast-btn" class="primary px">Coast to the Moon</button>
+            <button id="reorbit-btn" class="px">Try the burn again</button>
+            <button id="replan4-btn" class="px">Plan again</button>
+          </div>
+        </section>
+
+        <section id="landing-panel" class="flight-panel" hidden>
+          <h2 class="px">Landing</h2>
+          <p id="landing-text" class="pxw"></p>
+          <div class="land-pad">
+            <button id="left-btn" class="px">LEFT</button>
+            <button id="thrust-btn" class="primary px">ENGINE</button>
+            <button id="right-btn" class="px">RIGHT</button>
+          </div>
+          <button id="go-btn" class="px go-btn" hidden>GO on the alarm</button>
+          <p class="pxw flight-keys land-keys">Keys: UP or SPACE = engine, LEFT and RIGHT = tilt, G = GO</p>
+          <div class="landing-end" hidden>
+            <button id="mission3-btn" class="primary px" disabled>Mission 3 (soon)</button>
+            <button id="retry-land-btn" class="px">Try the landing again</button>
+            <button id="replan2-btn" class="px">Plan again</button>
+          </div>
+        </section>
+
+
+
+
+        <section class="cargo-section">
+          <h2 class="px">Cargo bay</h2>
+          <ul id="cargo" class="cargo"></ul>
+          <p id="cargo-hint" class="pxw"></p>
+        </section>
+      </div>
+    </div>
+
+    <footer id="credits">Earth-Moon distance: NASA JPL Horizons. Earth: NASA GIBS (Blue Marble, Black Marble, MODIS Terra clouds) and EPIC (DSCOVR). Solar flares: NASA DONKI. Asteroids: NASA JPL. Moon terrain: NASA LRO LOLA via Moon Trek. Site photos: NASA Image and Video Library. Art and sound generated in code.</footer>
+  </main>
+
+  <script src="src/sfx.js"></script>
+  <script src="src/pixeltext.js"></script>
+  <script src="src/render.js"></script>
+  <script src="src/moon-data.js"></script>
+  <script src="src/moon.js"></script>
+  <script src="data/earth-maps.js"></script>
+  <script src="data/moon-nasa.js"></script>
+  <script src="src/moon-render.js"></script>
+  <script src="src/launch.js"></script>
+  <script src="src/launch-render.js"></script>
+  <script src="src/tli.js"></script>
+  <script src="src/tli-render.js"></script>
+  <script src="src/landing.js"></script>
+  <script src="src/landing-render.js"></script>
+  <script src="data/horizons-moon.js"></script>
+  <script src="src/moon-main.js"></script>
+</body>
+</html>

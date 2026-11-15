@@ -15,12 +15,26 @@ const Game = (function () {
     };
   }
 
+  // Waiting for weather is not free: each day waited gives more prep time but systems age.
+  const WAIT = { fuelPerDay: 4, countdownPerDay: 20, failurePerDay: 0.04 };
+
   // carry: { stability, fuel } left over from the previous level; one pool for the whole mission.
+  // carry.waited (days skipped in the launch window) and carry.day (the chosen day's weather) come
+  // from the weather window at mission start.
   function start(levels, index, seed, events = [], carry = null) {
-    const cfg = levels[index];
+    const waited = (carry && carry.waited) || 0;
+    const base = levels[index];
+    const cfg = {
+      ...base,
+      countdown: base.countdown + WAIT.countdownPerDay * waited,
+      failureChance: Math.min(0.85, base.failureChance + WAIT.failurePerDay * waited),
+    };
     return {
       index,
       cfg,
+      final: index === levels.length - 1,
+      launchDay: (carry && carry.day) || null,
+      waited,
       rng: makeRng(seed),
       timeLeft: cfg.countdown,
       stability: carry ? carry.stability : 100,
@@ -104,8 +118,14 @@ const Game = (function () {
     if (!canLaunch(s)) return false;
     if (s.stability < s.cfg.minStability) return lose(s, `NO-GO: stability ${Math.round(s.stability)} is below ${s.cfg.minStability}.`), true;
     if (s.fuel < s.cfg.minFuel) return lose(s, `NO-GO: fuel ${Math.round(s.fuel)} is below ${s.cfg.minFuel}.`), true;
+    // Final launch into NO-GO weather: big chance the rocket is lost.
+    const day = s.final ? s.launchDay : null;
+    if (day && !day.go && s.rng() < day.risk) {
+      return lose(s, `Launched into bad weather and lost the rocket. ${day.reason}`), true;
+    }
     s.status = 'won';
     s.stars = 1 + (s.timeLeft >= 0.4 * s.cfg.countdown ? 1 : 0) + (s.stability >= 80 ? 1 : 0);
+    if (day && !day.go) { s.stars = Math.max(1, s.stars - 1); s.lucky = true; }
     s.log.push(`GO for launch. ${s.stars} star${s.stars > 1 ? 's' : ''}.`);
     return true;
   }
@@ -182,7 +202,7 @@ const Game = (function () {
     return { ok: true, fixed: false };
   }
 
-  return { start, canCheck, startCheck, canLaunch, requestLaunch, tick, applySupply, finishRepair, applyEvent, minigameFor, MISS_PENALTY };
+  return { WAIT, start, canCheck, startCheck, canLaunch, requestLaunch, tick, applySupply, finishRepair, applyEvent, minigameFor, MISS_PENALTY };
 })();
 
 if (typeof module !== 'undefined') module.exports = Game;

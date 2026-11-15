@@ -161,8 +161,24 @@ const PixelText = (function () {
 
   // Redraw only elements whose text, size or state changed since last time.
   // .px = one line, sized to the text. .pxw = wraps to the element's width (for sentences).
+  // Only rescan when the page changed: text, classes, visibility or window size. A slow safety rescan
+  // (twice a second) catches anything else, like layout changes from images loading.
+  let dirty = true, lastFull = 0, watching = false;
+  function watch() {
+    watching = true;
+    new MutationObserver(() => { dirty = true; }).observe(document.body, {
+      subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['class', 'disabled', 'hidden'],
+    });
+    window.addEventListener('resize', () => { dirty = true; });
+  }
   function sync() {
+    if (!watching) watch();
+    const now = performance.now();
+    if (!dirty && now - lastFull < 500) return;
+    dirty = false;
+    lastFull = now;
     const bodyCls = document.body.className;
+    const vw = window.innerWidth; // a resize can change --px through media/container queries
     for (const el of document.querySelectorAll('.px, .pxw')) {
       const text = clean(el.textContent);
       const wrapIt = el.classList.contains('pxw');
@@ -170,7 +186,7 @@ const PixelText = (function () {
       if (wrapIt && !width) continue; // hidden: draw once it is visible
       const state = el.closest('li, button, section, .overlay');
       const reveal = el.dataset.reveal === undefined ? Infinity : Number(el.dataset.reveal);
-      const key = `${text}|${reveal}|${width}|${el.className}|${state ? state.className : ''}|${bodyCls}|${el.disabled ? 'd' : ''}`;
+      const key = `${text}|${reveal}|${width}|${el.className}|${state ? state.className : ''}|${bodyCls}|${el.disabled ? 'd' : ''}|${vw}`;
       if (el._pxKey === key) continue;
       el._pxKey = key;
       if (!text) { el.style.backgroundImage = 'none'; el.style.setProperty('--pxh', '0px'); continue; }

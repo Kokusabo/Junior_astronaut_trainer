@@ -6,14 +6,30 @@
   <title>First Mission: On the Ground</title>
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="fit-screen">
   <main class="game">
     <header class="topbar">
       <div>
         <h1 class="px">First Mission: On the Ground</h1>
         <p id="level-name" class="px"></p>
       </div>
-      <button id="mute-btn" class="icon-btn px" aria-label="Toggle sound">SOUND ON</button>
+      <section class="hud">
+        <div class="stat" id="stability-stat">
+          <span class="stat-label px">Stability</span>
+          <div class="bar"><div class="ghost"></div><div id="stability-bar" class="fill"></div></div>
+        </div>
+        <div class="stat" id="fuel-stat">
+          <span class="stat-label px">Fuel</span>
+          <div class="bar"><div class="ghost"></div><div id="fuel-bar" class="fill"></div></div>
+        </div>
+      </section>
+      <div class="top-btns">
+        <details class="log">
+          <summary class="icon-btn"><span class="px">LOG</span></summary>
+          <ol id="log"></ol>
+        </details>
+        <button id="mute-btn" class="icon-btn px" aria-label="Toggle sound">SOUND ON</button>
+      </div>
     </header>
 
     <div class="layout">
@@ -35,14 +51,18 @@
       </div>
 
       <div class="col-side">
-        <section class="hud">
-          <div class="stat" id="stability-stat">
-            <span class="stat-label px">Stability</span>
-            <div class="bar"><div class="ghost"></div><div id="stability-bar" class="fill"></div></div>
+        <section id="window-panel" class="window-panel" hidden>
+          <h2 class="px">Launch window</h2>
+          <p class="pxw window-intro">Real Kennedy Space Center weather from NASA POWER. Skip ahead to a GO day, then lock in your launch. Each day waited costs fuel and wears the systems. The window closes after day 7.</p>
+          <ol id="days" class="days"></ol>
+          <div class="day-detail">
+            <p id="day-title" class="px"></p>
+            <p id="day-reason" class="pxw"></p>
           </div>
-          <div class="stat" id="fuel-stat">
-            <span class="stat-label px">Fuel</span>
-            <div class="bar"><div class="ghost"></div><div id="fuel-bar" class="fill"></div></div>
+          <p id="wait-cost" class="pxw"></p>
+          <div class="window-btns">
+            <button id="skip-btn" class="px">Skip a day</button>
+            <button id="lock-btn" class="primary px">Launch on this day</button>
           </div>
         </section>
 
@@ -59,10 +79,6 @@
           <p id="hint" class="pxw"></p>
         </section>
 
-        <details class="log">
-          <summary><span class="px">Mission log</span></summary>
-          <ol id="log"></ol>
-        </details>
       </div>
     </div>
 
@@ -79,11 +95,13 @@
       <ul id="boot-list" class="boot-list">
         <li data-feed="flares"><span class="boot-dot"></span><span class="boot-name px">Solar flares · NASA DONKI</span><span class="boot-st px">connecting...</span></li>
         <li data-feed="storms"><span class="boot-dot"></span><span class="boot-name px">Severe storms · NASA EONET</span><span class="boot-st px">connecting...</span></li>
+        <li data-feed="weather"><span class="boot-dot"></span><span class="boot-name px">Launch weather · NASA POWER</span><span class="boot-st px">connecting...</span></li>
         <li data-feed="studies"><span class="boot-dot"></span><span class="boot-name px">Studies · NASA OSDR</span><span class="boot-st px">connecting...</span></li>
       </ul>
       <div class="boot-bar"><div></div></div>
       <button id="boot-start" class="primary px" disabled>Loading NASA data...</button>
       <button id="boot-skip" class="icon-btn px">Start without waiting</button>
+      <button id="boot-moon" class="icon-btn px">Test: Mission 2 (Moon)</button>
     </div>
   </div>
 
@@ -114,6 +132,8 @@
   <script src="src/pixeltext.js"></script>
   <script src="src/failures.js"></script>
   <script src="src/events.js"></script>
+  <script src="src/weather.js"></script>
+  <script src="data/power-ksc.js"></script>
   <script src="data/osdr-studies.js"></script>
   <script src="src/levels.js"></script>
   <script src="src/minigames.js"></script>

@@ -69,6 +69,8 @@ const Sfx = (function () {
     static: () => noise(0.5, 0.05, 3000),
     tick: () => tone(1200, 0.03, 'square', 0.03),
     count: (n) => tone(n === 0 ? 1320 : 660, n === 0 ? 0.5 : 0.12, 'square', 0.05),
+    thrust: () => noise(0.14, 0.05, 260), // call repeatedly while an engine burns
+    crash: () => { noise(1.2, 0.3, 500); tone(90, 0.8, 'sawtooth', 0.06, 0, -60); },
     rumble: () => { noise(6, 0.25, 180); noise(3, 0.12, 900, 0.2); },
     win: () => [392, 523, 659, 784, 1047].forEach((f, i) => tone(f, 0.18, 'triangle', 0.06, i * 0.1)),
     lose: () => [392, 330, 262, 196].forEach((f, i) => tone(f, 0.25, 'sawtooth', 0.05, i * 0.18)),

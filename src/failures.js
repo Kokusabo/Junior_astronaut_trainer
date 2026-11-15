@@ -15,10 +15,10 @@ const SUPPLIES = {
   pump_parts: { name: 'Pump parts' },
   antenna_relay: { name: 'Antenna relay' },
   fuel_filter: { name: 'Fuel filter' },
-  replacement_valve: { name: 'Replacement valve' },
+  replacement_valve: { name: 'Spare valve' },
   diagnostic_module: { name: 'Diagnostic module' },
   fuse_pack: { name: 'Fuse pack' },
-  coolant: { name: 'Coolant canister' },
+  coolant: { name: 'Coolant' },
 };
 
 const FAILURES = {

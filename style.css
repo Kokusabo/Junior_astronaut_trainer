@@ -83,7 +83,9 @@ section[hidden] { display: none; }
 h2 { color: var(--accent); margin: 0 0 12px; }
 
 /* ---------- Scene ---------- */
-.scene-wrap { position: relative; border-image-source: var(--f-screen); padding: 0; }
+.scene-wrap { position: relative; border-image-source: var(--f-screen); padding: 0; overflow: hidden; container-type: inline-size; }
+/* Narrow scene: badge text drops to the small pixel size so it never spills out. */
+@container (max-width: 640px) { .scene-wx .px { --px: 1; } }
 #scene { display: block; width: 100%; aspect-ratio: 16 / 9; image-rendering: pixelated; }
 .scene-timer {
   position: absolute; top: 10px; right: 10px; display: flex; align-items: flex-end; gap: 4px;
@@ -345,3 +347,180 @@ body.launching .scene-timer, body.launching .scene-wx { display: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* ---------- Launch window (weather planning) ---------- */
+body.planning .col-side > :not(#window-panel) { display: none; }
+.window-intro { color: var(--muted); margin: 0 0 12px; }
+.days { list-style: none; padding: 0; margin: 0 0 12px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.days li {
+  display: grid; justify-items: center; gap: 4px; padding: 6px 2px;
+  border: 4px solid transparent; border-image: var(--f-well) 3 fill / 4px stretch;
+}
+.days li canvas { width: 32px; height: 32px; image-rendering: pixelated; }
+.days .d-date { --px: 2; color: var(--muted); }
+.days .d-go { --px: 2; }
+.days li.go .d-go { color: var(--good); }
+.days li.nogo .d-go { color: var(--bad); }
+.days li.past { opacity: 0.35; }
+.days li.now { border-image-source: var(--f-well-scan); }
+.days li.now .d-date { color: var(--text); }
+.day-detail { padding: 8px 10px; margin-bottom: 10px; border: 6px solid transparent; border-image: var(--f-well) 3 fill / 6px stretch; }
+#day-title { color: var(--text); margin: 0 0 8px; }
+#day-reason { color: var(--muted); margin: 0; }
+body.window-nogo #day-title { color: var(--bad); }
+body.window-go #day-title { color: var(--good); }
+#wait-cost { color: var(--accent); margin: 0 0 12px; }
+/* Side by side when there is room, stacked when the labels do not fit. */
+.window-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.window-btns button { flex: 1 1 auto; }
+body.timelapse .window-btns button { pointer-events: none; opacity: 0.5; }
+body.planning .scene-timer > span { display: none; }
+
+/* ---------- Mission 2: trip planning ---------- */
+.site-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.site-list button.on, .cargo-item.on { border-image-source: var(--f-primary); background-color: #ff9a3d; color: #3a1205; }
+.site-card { display: grid; grid-template-columns: auto 1fr; gap: 12px; padding: 8px; border: 6px solid transparent; border-image: var(--f-well) 3 fill / 6px stretch; }
+.site-card[hidden] { display: none; }
+#site-photo { width: 140px; height: 140px; object-fit: cover; image-rendering: pixelated; border: 2px solid var(--edge-hi); }
+#site-photo[hidden] { display: none; }
+#site-name { color: var(--accent); margin: 0 0 6px; }
+#site-region { --px: 1; color: var(--muted); margin: 0 0 10px; }
+.site-stats { list-style: none; padding: 0; margin: 0 0 10px; display: grid; gap: 6px; }
+.site-stats li { color: var(--text); }
+li.px { display: block; width: var(--pxw); height: var(--pxh); }
+#site-photo[hidden] + .site-info { grid-column: 1 / -1; }
+.site-info { min-width: 0; }
+.moon .col-side { min-width: 0; }
+#site-fact { color: var(--muted); }
+.budget-num { color: var(--text); margin: 6px 0 0; }
+.fuel-stack { position: relative; height: 18px; margin-top: 8px; display: flex; border: 4px solid transparent; border-image: var(--f-well) 3 fill / 4px stretch; overflow: hidden; }
+.fuel-stack .seg { height: 100%; transition: width 0.2s ease-out; }
+.seg-site { background: repeating-linear-gradient(90deg, var(--accent) 0 6px, #b8501a 6px 8px); }
+.seg-cargo { background: repeating-linear-gradient(90deg, var(--pink) 0 6px, #a02a60 6px 8px); }
+.seg-reserve { position: absolute; right: 0; top: 0; bottom: 0; width: 15%; background: repeating-linear-gradient(-45deg, rgba(77, 255, 195, 0.35) 0 3px, transparent 3px 6px); border-left: 2px solid var(--good); }
+.fuel-stack.over .seg-reserve { background: repeating-linear-gradient(-45deg, rgba(255, 77, 106, 0.6) 0 3px, transparent 3px 6px); border-left-color: var(--bad); }
+.fuel-legend { --px: 1; color: var(--muted); margin: 6px 0 0; }
+#budget-status { color: var(--muted); margin: 12px 0; }
+#budget-status.alert { color: var(--bad); }
+.cargo { list-style: none; padding: 0; margin: 0 0 10px; display: grid; grid-template-columns: 1fr; gap: 4px; }
+.cargo-item { width: 100%; display: grid; grid-template-columns: 32px 1fr auto; gap: 6px; align-items: center; height: auto; min-width: 0; padding: 4px 6px; text-align: left; }
+.cargo-item canvas { width: 32px; height: 32px; image-rendering: pixelated; }
+.cargo-item .c-name { justify-self: start; }
+.cargo-item .c-kg { --px: 1; color: var(--muted); }
+.cargo-item.on .c-kg { color: #3a1205; }
+#cargo-hint { color: var(--muted); min-height: 3em; }
+@media (max-width: 480px) { .site-card { grid-template-columns: 1fr; } }
+#map { display: block; width: 100%; aspect-ratio: 16 / 9; image-rendering: pixelated; }
+.moon .scene-timer { top: auto; bottom: 10px; }
+
+/* ---------- One-screen layout (desktop) ----------
+   The page fills exactly one window: header, then the two columns, then a one-line footer. The scene
+   sizes itself to the window height so scene + radio always fit; the side column scrolls only if a
+   very short window still cannot hold it. Phones keep the normal scrolling layout. */
+.top-btns { display: flex; gap: 8px; align-items: center; }
+.topbar .hud { border: 0; border-image: none; padding: 0; box-shadow: none; background: none; flex: 1; max-width: 460px; margin: 0 16px; }
+.topbar .log { position: relative; border: 0; border-image: none; padding: 0; box-shadow: none; background: none; }
+.topbar .log summary { list-style: none; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  border: 6px solid transparent; border-image: var(--f-btn) 3 / 6px stretch; background-color: #2e1b4d; background-clip: padding-box;
+  height: calc(var(--pxh, 14px) + 24px); padding: 0 12px; }
+.topbar .log summary::-webkit-details-marker { display: none; }
+.topbar .log summary .px { --px: 2; }
+.topbar .log ol { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; width: min(380px, 90vw); max-height: 50vh;
+  margin: 0; padding: 10px 10px 10px 28px; background: #12081f; border: 6px solid transparent; border-image: var(--f-panel) 3 fill / 6px stretch; }
+#hint:empty, #status:empty { display: none; }
+.supplies { grid-template-columns: 1fr 1fr; }
+.supply { grid-template-columns: 32px minmax(0, 1fr) auto; }
+.supply .supply-name { justify-self: stretch; }
+
+@media (min-width: 920px) {
+  body.fit-screen .game { height: 100vh; height: 100dvh; display: flex; flex-direction: column; padding: 10px 16px 6px; }
+  body.fit-screen .topbar { margin-bottom: 10px; flex: none; flex-wrap: nowrap; }
+  body.fit-screen .layout { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); }
+  body.fit-screen .col-main { position: static; min-height: 0; }
+  body.fit-screen .col-main .scene-wrap { width: min(100%, calc((100dvh - 250px) * 16 / 9)); justify-self: center; }
+  body.fit-screen .col-main .radio { min-height: 0; }
+  body.fit-screen .col-side { min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #5c3a8c transparent; padding-right: 2px; }
+  body.fit-screen #portrait { width: 72px; height: 72px; }
+  body.fit-screen .radio { grid-template-columns: 84px 1fr; }
+  body.fit-screen section, body.fit-screen .log { padding: 8px 10px; }
+  body.fit-screen h2 { margin-bottom: 8px; padding-bottom: 4px; }
+  body.fit-screen .checklist { gap: 3px; margin-bottom: 8px; }
+  body.fit-screen .checklist li { padding: 2px 6px; border-width: 4px; border-image-width: 4px; }
+  body.fit-screen .checklist button { height: calc(var(--pxh, 14px) + 10px); }
+  body.fit-screen .supplies { gap: 3px; }
+  body.fit-screen .supply { padding: 2px 6px; }
+  body.fit-screen #launch-btn { padding: 8px; height: calc(var(--pxh, 14px) + 20px); }
+  body.fit-screen #status { margin-top: 6px; }
+  body.fit-screen footer { flex: none; margin-top: 4px; font-size: 0.68rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+@media (min-width: 920px) and (max-width: 1200px) { h1 { --px: 2; } }
+/* Big screens: let the game grow with the window height (scene width + side column), not a fixed cap. */
+@media (min-width: 920px) {
+  body.fit-screen .game { max-width: max(1240px, calc((100dvh - 250px) * 16 / 9 + 500px)); }
+  body.fit-screen .col-main .scene-wrap { width: min(100%, max(320px, calc((100dvh - 250px) * 16 / 9))); }
+}
+@media (min-width: 920px) and (min-height: 560px) { body.fit-screen { overflow: hidden; } } /* the layout is sized to fit; no stray scrollbar */
+#boot-moon { display: block; margin: 8px auto 0; }
+
+/* Mission 2 flight: the planning panels hide while flying. */
+body.flying .budget, body.flying .cargo-section, body.flying .site-panel { display: none; }
+.flight-text, #flight-text, #landing-text { color: var(--text); margin: 0 0 12px; min-height: 3em; }
+.flight-btns { display: grid; gap: 6px; margin-bottom: 8px; }
+.flight-btns button { width: 100%; }
+.flight-btns button[hidden] { display: none; }
+#burn-btn.holding { border-image-source: var(--f-primary-down); background-color: #f08a30; }
+.flight-keys { color: var(--muted); margin: 0 0 10px; }
+.flight-log { list-style: none; padding: 0; margin: 0 0 10px; display: grid; gap: 4px; }
+.flight-log li { color: var(--muted); }
+.flight-log li.ok { color: var(--good); }
+.flight-log li.bad { color: var(--bad); }
+.flight-end { display: grid; gap: 6px; }
+.flight-end[hidden] { display: none; }
+body.flying .scene-timer { display: none; } /* the cockpit dashboard has its own trip readout */
+
+/* Mission 2 flight: full-screen chase camera with the controls floating on top. */
+body.flying { overflow: hidden; }
+body.flying .scene-wrap { position: fixed; inset: 0; z-index: 50; border: 0; background: #03020a; }
+body.flying #map { width: 100vw; height: 100vh; aspect-ratio: auto; object-fit: contain; }
+body.flying .flight-panel { position: fixed; right: 16px; bottom: 16px; z-index: 60; width: min(380px, calc(100vw - 32px)); }
+body.flying .radio { position: fixed; left: 16px; bottom: 16px; z-index: 60; width: min(520px, calc(100vw - 430px)); min-height: 0; }
+body.flying .topbar { position: fixed; top: 8px; right: 16px; z-index: 60; margin: 0; padding: 0; border: 0; }
+body.flying .topbar > div:first-child { display: none; }
+@media (max-width: 760px) { body.flying .radio { display: none; } }
+.flight-keys[hidden] { display: none; }
+.land-pad { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 6px; margin-bottom: 8px; }
+.land-pad button { width: 100%; touch-action: none; }
+.land-pad button.holding, #thrust-btn.holding { filter: brightness(1.3); }
+.go-btn { width: 100%; margin-bottom: 8px; }
+.go-btn[hidden], .landing-end[hidden], .launch-end[hidden], .land-pad[hidden] { display: none; }
+.landing-end, .launch-end { display: grid; gap: 6px; }
+
+/* Mission 2 planning: three columns. Left: map, chosen site, radio. Middle: sites and fuel. Right: cargo. */
+.col-mid { display: grid; gap: 12px; align-content: start; min-width: 0; }
+body.flying #site-card { display: none; }
+@media (min-width: 920px) {
+  .moon .layout { grid-template-columns: minmax(0, 2fr) minmax(250px, 1fr) minmax(250px, 1fr); }
+  body.fit-screen .moon .col-main { grid-template-rows: auto auto auto; align-content: start; }
+  body.fit-screen .moon .col-main .scene-wrap { width: min(100%, max(320px, calc((100dvh - 350px) * 16 / 9))); }
+  body.fit-screen .moon .col-mid, body.fit-screen .moon .col-side { min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #5c3a8c transparent; }
+  body.fit-screen .moon .scene-timer .timer { --px: 2; }
+  body.fit-screen .moon .scene-timer { padding: 4px 8px; }
+  body.fit-screen .moon .col-main .radio { min-height: 84px; }
+  body.fit-screen .moon .site-card { padding: 6px; gap: 10px; }
+  body.fit-screen .moon #site-photo { width: 96px; height: 96px; }
+  body.fit-screen .moon #site-region, body.fit-screen .moon .site-stats { margin-bottom: 4px; }
+  body.fit-screen .moon .site-stats { gap: 3px; }
+  body.fit-screen .moon .site-list { display: grid; gap: 3px; margin-bottom: 0; }
+  body.fit-screen .moon .site-list button { width: 100%; height: calc(var(--pxh, 14px) + 12px); justify-content: start; text-align: left; padding: 0 10px; }
+  body.fit-screen .moon .site-stats { grid-template-columns: auto auto; column-gap: 18px; justify-content: start; }
+  body.fit-screen .moon #site-fact { display: none; } /* the radio reads the site fact out; keeps the card short */
+  body.fit-screen .moon .cargo-section h2 { margin-bottom: 6px; }
+  body.fit-screen .moon .cargo { gap: 3px; margin-bottom: 4px; }
+  body.fit-screen .moon .cargo-item { padding: 0 6px; grid-template-columns: 20px minmax(0, 1fr) auto; }
+  body.fit-screen .moon .cargo-item canvas { width: 20px; height: 20px; }
+  body.fit-screen .moon #cargo-hint { min-height: 0; margin: 0; }
+  body.fit-screen .moon #budget-status { margin: 6px 0; }
+}
+
+/* Flying and landing stay full screen even with the one-screen planning layout. */
+body.fit-screen.flying .moon .col-main .scene-wrap { width: auto; justify-self: stretch; }
