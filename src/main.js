@@ -908,6 +908,7 @@
     if (state.status === 'playing' || endAt < 0 || now < endAt) { end.hidden = true; return; }
     if (!end.hidden) return;
     end.hidden = false;
+    document.body.classList.remove('launching'); // the full-screen launch view sits above overlays: drop it so the end screen and its buttons show
     const btn = $('end-btn');
     const starsEl = $('end-stars');
     starsEl.innerHTML = '';
@@ -1237,6 +1238,7 @@
     const d = state.launchDay;
     return d ? { hour: 18.5, kind: d.kind, wind: d.wind } : undefined;
   }
+  $('menu-btn').addEventListener('click', () => location.reload()); // back to the mission select (progress on this mission is lost)
   $('boot-start').addEventListener('click', startMission);
   $('boot-skip').addEventListener('click', startMission);
   // Mission select: centred cards with the saved stars. Card 1 starts Mission 1 right here.

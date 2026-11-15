@@ -489,7 +489,7 @@
   muteBtn.addEventListener('click', () => { Sfx.toggle(); muteLabel(); });
   document.addEventListener('pointerdown', () => Sfx.unlock(), { once: true });
 
-  say(`Flight control to crew. Welcome to mission 2.${m1 ? ` Mission 1 left us ${Math.round(m1.fuel)} percent fuel, so we start with a ${plan.bonus} percent bonus.` : ''} Pick a landing site and pack the lander. Every kilogram costs fuel, and you need fuel left to land.', true);
+  say(`Flight control to crew. Welcome to mission 2.${m1 ? ` Mission 1 left us ${Math.round(m1.fuel)} percent fuel, so we start with a ${plan.bonus} percent bonus.` : ''} Pick a landing site and pack the lander. Every kilogram costs fuel, and you need fuel left to land.`, true);
   update();
   // Real clouds on the flight Earth: yesterday's MODIS Terra photos from NASA GIBS (saved copy as fallback).
   (function liveClouds() {

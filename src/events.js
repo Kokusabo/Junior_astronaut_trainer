@@ -1,4 +1,4 @@
-// Random events that can hit after a clear system check.
+// Random events that can hit after a clear system check. They cost time, never stability: a green light stays safe.
 // Effect fields: stability / timeLeft (added), checkPenalty (seconds added to the next check),
 // supply: 'random' gives +1 of a supply this level stocks.
 
@@ -14,9 +14,9 @@ function flaresToEvents(rows) {
     const cls = String(r.classType || '');
     const date = String(r.peakTime || r.beginTime || '').slice(0, 10);
     if (cls[0] === 'M') {
-      out.push({ name: `Solar flare ${cls}`, text: `NASA DONKI: ${cls} solar flare, ${date}. Radio static on the range. Stability -4.`, effect: { stability: -4 } });
+      out.push({ name: `Solar flare ${cls}`, text: `NASA DONKI: ${cls} solar flare, ${date}. Radio static on the range. Countdown loses 5 s.`, effect: { timeLeft: -5 } });
     } else if (cls[0] === 'X') {
-      out.push({ name: `Solar flare ${cls}`, text: `NASA DONKI: ${cls} solar flare, ${date}. Radio blackout. Stability -8, next check +3 s.`, effect: { stability: -8, checkPenalty: 3 } });
+      out.push({ name: `Solar flare ${cls}`, text: `NASA DONKI: ${cls} solar flare, ${date}. Radio blackout. Countdown loses 10 s, next check +3 s.`, effect: { timeLeft: -10, checkPenalty: 3 } });
     }
   }
   return out;
@@ -33,8 +33,8 @@ function stormsToEvents(json) {
     const where = `${Math.abs(lat).toFixed(1)}${lat >= 0 ? 'N' : 'S'} ${Math.abs(lon).toFixed(1)}${lon >= 0 ? 'E' : 'W'}`;
     out.push({
       name: `Storm ${ev.title}`,
-      text: `NASA EONET is tracking ${ev.title} at ${where} (${String(g.date).slice(0, 10)}). Weather team re-runs the forecast. Countdown -8 s, stability -3.`,
-      effect: { timeLeft: -8, stability: -3 },
+      text: `NASA EONET is tracking ${ev.title} at ${where} (${String(g.date).slice(0, 10)}). Weather team re-runs the forecast. Countdown -8 s.`,
+      effect: { timeLeft: -8 },
     });
   }
   return out;

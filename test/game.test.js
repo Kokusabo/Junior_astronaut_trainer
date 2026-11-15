@@ -202,8 +202,8 @@ const { GROUND_EVENTS, flaresToEvents } = require('../src/events.js');
     { classType: 'X9.0', peakTime: '2024-10-03T12:18Z' },
   ]);
   assert.equal(evs.length, 2);
-  assert.equal(evs[0].effect.stability, -4);
-  assert.deepEqual(evs[1].effect, { stability: -8, checkPenalty: 3 });
+  assert.deepEqual(evs[0].effect, { timeLeft: -5 });
+  assert.deepEqual(evs[1].effect, { timeLeft: -10, checkPenalty: 3 });
   assert.ok(evs[1].text.includes('X9.0') && evs[1].text.includes('2024-10-03'));
   assert.deepEqual(flaresToEvents(null), []);
 }
@@ -219,7 +219,7 @@ const { GROUND_EVENTS, flaresToEvents } = require('../src/events.js');
   assert.equal(evs.length, 2);
   assert.ok(evs[0].text.includes('19.1N 144.2E') && evs[0].text.includes('2026-11-07'), evs[0].text);
   assert.ok(evs[1].text.includes('11.2S 149.6W'));
-  assert.deepEqual(evs[0].effect, { timeLeft: -8, stability: -3 });
+  assert.deepEqual(evs[0].effect, { timeLeft: -8 });
   assert.deepEqual(stormsToEvents(null), []);
 }
 
