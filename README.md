@@ -9,7 +9,7 @@ get a GO before the countdown runs out. Three levels, each with its own checklis
 
 Open `index.html` in a browser for mission 1 (Earth: get the rocket ready and launch).
 Open `moon.html` for mission 2 (Moon: plan the trip, in progress).
-No install, no build step, no server needed.
+
 
 ## NASA data
 
