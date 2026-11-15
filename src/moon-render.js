@@ -205,70 +205,143 @@ const MoonRender = (function () {
 
   // Orthographic globe: north pole tipped toward the camera, spun by rot (radians of longitude).
   const TILT = 0.38, BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
-  function paintRealEarth(c, cx, cy, r, rot) {
-    const g = c.getContext('2d'), out = g.createImageData(c.width, c.height), d = out.data;
-    const D = tex.day, N = tex.night, C = tex.clouds, ct = Math.cos(TILT), st = Math.sin(TILT);
+  // Everything about a globe pixel that does not change as Earth turns (where it is on the map before the
+  // spin, and how the Sun lights it), worked out once per size. Turning Earth then only re-reads the maps.
+  // Big sizes can be prepared a little per frame ahead of time (prepareEarth), so nothing freezes later.
+  const geoCache = new Map(), geoWork = new Map();
+  function earthGeo(r, budgetMs = Infinity) {
+    const done = geoCache.get(r);
+    if (done) return done;
+    const size = r * 2 + 16, cx = r + 8, cy = r + 8, ct = Math.cos(TILT), st = Math.sin(TILT);
     const hz = LIGHT[2] + 1, hn = Math.hypot(LIGHT[0], LIGHT[1], hz); // half vector for the sun glint
-    const sample = (m, lat, lon) => {
-      const u = Math.floor((((lon / (2 * Math.PI) + 0.5) % 1 + 1) % 1) * m.w), v = Math.min(m.h - 1, Math.floor((0.5 - lat / Math.PI) * m.h));
-      return v * m.w + u;
-    };
-    for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) {
-      const nx = (x + 0.5 - cx) / r, ny = (y + 0.5 - cy) / r, q = nx * nx + ny * ny, i = (y * c.width + x) * 4;
-      if (q > 1) { // thin blue atmosphere glow beyond the rim, on the sunlit side
-        const px_ = (Math.sqrt(q) - 1) * r;
-        if (px_ > 6) continue;
-        const l = (nx * LIGHT[0] + ny * LIGHT[1]) / Math.sqrt(q);
-        const a = (1 - px_ / 6) ** 2 * Math.max(0, Math.min(1, l + 0.35));
-        if (a <= 0) continue;
-        d[i] = 120; d[i + 1] = 180; d[i + 2] = 255; d[i + 3] = 230 * a;
-        continue;
+    let G = geoWork.get(r);
+    if (!G) {
+      const m = size * size, f = () => new Float32Array(m);
+      G = { size, n: 0, y: 0, idx: new Int32Array(m), glow: f(), lonN: f(), vN: f(), k: f(), lit: f(), rim: f(), warm: f(), spec: f() };
+      geoWork.set(r, G);
+    }
+    const t0 = performance.now();
+    for (; G.y < size; G.y++) {
+      if (performance.now() - t0 > budgetMs) return null; // not finished: carry on next frame
+      const y = G.y;
+      for (let x = 0; x < size; x++) {
+        const nx = (x + 0.5 - cx) / r, ny = (y + 0.5 - cy) / r, q = nx * nx + ny * ny, e = G.n;
+        if (q > 1) { // thin blue atmosphere glow beyond the rim, on the sunlit side
+          const out = (Math.sqrt(q) - 1) * r;
+          if (out > 6) continue;
+          const a = (1 - out / 6) ** 2 * Math.max(0, Math.min(1, (nx * LIGHT[0] + ny * LIGHT[1]) / Math.sqrt(q) + 0.35));
+          if (a > 0) { G.idx[e] = y * size + x; G.glow[e] = a; G.n++; }
+          continue;
+        }
+        const nz = Math.sqrt(1 - q), vy = -ny, wy = vy * ct + nz * st, wz = -vy * st + nz * ct;
+        const l = nx * LIGHT[0] + ny * LIGHT[1] + nz * LIGHT[2];
+        G.idx[e] = y * size + x;
+        G.lonN[e] = Math.atan2(nx, wz) / (2 * Math.PI);
+        G.vN[e] = 0.5 - Math.asin(Math.max(-1, Math.min(1, wy))) / Math.PI;
+        G.k[e] = Math.max(0, Math.min(1, (l + 0.06) / 0.2 + (BAYER[(x & 3) + (y & 3) * 4] / 16 - 0.5) * 0.35)); // dithered terminator
+        G.lit[e] = 0.3 + 0.9 * Math.pow(Math.max(0, l), 0.6); // sunlight
+        G.rim[e] = Math.pow(1 - nz, 2.2) * 0.75; // blue haze toward the edge
+        G.warm[e] = Math.max(0, 1 - Math.abs(l - 0.02) / 0.09); // sunset colours along the terminator
+        G.spec[e] = Math.pow(Math.max(0, (nx * LIGHT[0] + ny * LIGHT[1] + nz * hz) / hn), 60); // sun glint strength
+        G.n++;
       }
-      const nz = Math.sqrt(1 - q), vy = -ny;
-      const wy = vy * ct + nz * st, wz = -vy * st + nz * ct;
-      const lat = Math.asin(Math.max(-1, Math.min(1, wy))), lon = Math.atan2(nx, wz) + rot;
-      const j = sample(D, lat, lon), cl = C ? C.v[sample(C, lat, lon)] : 0;
-      let R = D.v[j * 4], G = D.v[j * 4 + 1], B = D.v[j * 4 + 2];
-      const ocean = B > R + 12 && R < 70 ? 1 : 0;
-      R += (238 - R) * cl; G += (242 - G) * cl; B += (250 - B) * cl;
-      // Sunlight with a soft, dithered terminator.
-      const l = nx * LIGHT[0] + ny * LIGHT[1] + nz * LIGHT[2];
-      let k = Math.max(0, Math.min(1, (l + 0.06) / 0.2 + (BAYER[(x & 3) + (y & 3) * 4] / 16 - 0.5) * 0.35));
-      const lit = 0.3 + 0.9 * Math.pow(Math.max(0, l), 0.6);
-      const spec = ocean * (1 - cl) * Math.pow(Math.max(0, (nx * LIGHT[0] + ny * LIGHT[1] + nz * hz) / hn), 60);
-      const rim = Math.pow(1 - nz, 2.2) * 0.75; // blue haze toward the edge
-      const warm = Math.max(0, 1 - Math.abs(l - 0.02) / 0.09); // sunset colours along the terminator
+    }
+    geoWork.delete(r);
+    if (geoCache.size > 12) geoCache.clear();
+    geoCache.set(r, G);
+    return G;
+  }
+  // Paints globe pixels [from, to) of the turned Earth into image data d. Only map lookups and sums.
+  function paintEarthRange(G, d, rot, from, to) {
+    const D = tex.day, N = tex.night, C = tex.clouds, rotN = rot / (2 * Math.PI) + 0.5;
+    const at = (m, u, vN) => Math.min(m.h - 1, (vN * m.h) | 0) * m.w + ((u * m.w) | 0);
+    for (let e = from; e < to; e++) {
+      const i = G.idx[e] * 4;
+      if (G.glow[e] > 0) { d[i] = 120; d[i + 1] = 180; d[i + 2] = 255; d[i + 3] = 230 * G.glow[e]; continue; }
+      let u = G.lonN[e] + rotN; u -= Math.floor(u);
+      const vN = G.vN[e], j = at(D, u, vN), cl = C ? C.v[at(C, u, vN)] : 0;
+      let R = D.v[j * 4], Gc = D.v[j * 4 + 1], B = D.v[j * 4 + 2];
+      const ocean = B > R + 12 && R < 70 ? 1 : 0, dayR = R, dayG = Gc, dayB = B;
+      R += (238 - R) * cl; Gc += (242 - Gc) * cl; B += (250 - B) * cl;
+      const k = G.k[e], lit = G.lit[e], rim = G.rim[e], warm = G.warm[e], spec = ocean * (1 - cl) * G.spec[e];
       R = (R * lit + (110 - R * lit) * rim + 60 * warm + 200 * spec) * k;
-      G = (G * lit + (170 - G * lit) * rim + 18 * warm + 190 * spec) * k;
+      Gc = (Gc * lit + (170 - Gc * lit) * rim + 18 * warm + 190 * spec) * k;
       B = (B * lit + (255 - B * lit) * rim + 160 * spec) * k;
       // Night: very dim surface plus city lights (dimmed under clouds).
-      const city = N ? N.v[sample(N, lat, lon)] * (1 - cl * 0.8) * (1 - k) : 0;
-      d[i] = Math.min(255, R + (D.v[j * 4] * 0.05 + 255 * city) * (1 - k));
-      d[i + 1] = Math.min(255, G + (D.v[j * 4 + 1] * 0.05 + 200 * city) * (1 - k));
-      d[i + 2] = Math.min(255, B + (D.v[j * 4 + 2] * 0.08 + 110 * city) * (1 - k));
+      const city = N ? N.v[at(N, u, vN)] * (1 - cl * 0.8) * (1 - k) : 0;
+      d[i] = Math.min(255, R + (dayR * 0.05 + 255 * city) * (1 - k));
+      d[i + 1] = Math.min(255, Gc + (dayG * 0.05 + 200 * city) * (1 - k));
+      d[i + 2] = Math.min(255, B + (dayB * 0.08 + 110 * city) * (1 - k));
       d[i + 3] = 255;
     }
-    g.putImageData(out, 0, 0);
   }
 
-  // Earth is cached per radius (it shrinks slowly, so each size is drawn once). scale: zoom for the departure.
-  // The real (NASA map) Earth also turns, so only the latest size and angle is kept.
-  const earthCache = new Map();
-  let earthLast = { key: '', img: null };
-  function drawEarth(x, y, r, scale = 1, rot = 0.26) {
-    let img = earthCache.get(r);
-    if (tex.day) {
-      const key = `${r}:${Math.round(rot * r)}:${tex.version}`;
-      if (earthLast.key !== key) earthLast = { key, img: canvasOf(r * 2 + 16, r * 2 + 16, (c) => paintRealEarth(c, r + 8, r + 8, r, Math.round(rot * r) / r)) };
-      img = earthLast.img;
-    } else if (!img) {
-      if (earthCache.size > 60) earthCache.clear();
-      img = canvasOf(r * 2 + 16, r * 2 + 16, (c) => paintEarth(c, r + 8, r + 8, r));
-      earthCache.set(r, img);
-    }
-    const s = img.width * scale;
-    ctx.drawImage(img, Math.round(x - s / 2), Math.round(y - s / 2), Math.round(s), Math.round(s));
+  // Rendered Earths, one slot per size: { key, c (canvas) }. A key says which spin and maps it shows.
+  const earthImgs = new Map();
+  const earthKey = (base, rot) => `${Math.round(rot * base)}:${tex.version}`;
+  function earthSlot(base) {
+    let slot = earthImgs.get(base);
+    if (!slot) { const c = document.createElement('canvas'); c.width = c.height = base * 2 + 16; earthImgs.set(base, (slot = { key: '', c })); }
+    return slot;
   }
+  function renderEarth(base, rot, budgetMs = Infinity, background = false) {
+    const slot = earthSlot(base), key = earthKey(base, rot);
+    if (slot.key === key) return slot.c;
+    // With a time budget: paint the new spin in slices while the old picture stays on screen, then swap.
+    if (budgetMs < Infinity && slot.key && (slot.key !== 'blank' || background)) { // never show a half-painted blank
+      const G = earthGeo(base);
+      if (!slot.img) slot.img = slot.c.getContext('2d').createImageData(slot.c.width, slot.c.height); // one buffer per size: no garbage
+      if (!slot.job || slot.job.key !== key) slot.job = { key, rot: Math.round(rot * base) / base, e: 0, img: slot.img };
+      const J = slot.job, t0 = performance.now();
+      while (J.e < G.n && performance.now() - t0 < budgetMs) { const to = Math.min(G.n, J.e + 3000); paintEarthRange(G, J.img.data, J.rot, J.e, to); J.e = to; }
+      if (J.e >= G.n) { slot.c.getContext('2d').putImageData(J.img, 0, 0); slot.key = J.key; slot.job = null; }
+      return slot.c;
+    }
+    const G = earthGeo(base), g = slot.c.getContext('2d'), out = slot.img || (slot.img = g.createImageData(slot.c.width, slot.c.height));
+    paintEarthRange(G, out.data, Math.round(rot * base) / base, 0, G.n);
+    g.putImageData(out, 0, 0);
+    slot.key = key;
+    return slot.c;
+  }
+  // Called every frame during Earth orbit: builds the flight's big Earths a few milliseconds at a time,
+  // including the departure picture itself, so the flight starts without a freeze.
+  function prepareEarth(sizes = [150, 240], budgetMs = 3) {
+    if (!tex.day) return;
+    for (const r of sizes) if (!earthGeo(r, budgetMs)) return;
+    for (const base of sizes) { // then paint them at the spin the flight starts with, a slice per frame
+      const slot = earthSlot(base);
+      if (slot.key === earthKey(base, 0.26)) continue;
+      if (!slot.key) slot.key = 'blank'; // lets renderEarth paint in slices instead of all at once
+      renderEarth(base, 0.26, budgetMs, true);
+      return;
+    }
+  }
+
+  // Flight art that never changes, built ahead of time in idle moments (one piece per call).
+  const warmTasks = [() => { if (!nebImg) nebImg = bakeNebula(); }, () => { if (!shipImg) shipImg = bakeShip(); }, () => litMoon(), () => { if (!sunImg) sunImg = bakeSun(); }, () => { if (!groundImg) groundImg = bakeGround(); }];
+  const warmUp = () => { const task = warmTasks.shift(); if (task) task(); return warmTasks.length > 0; };
+
+  // Draws Earth with radius r at (x, y). Sizes between 60 and 150 are drawn from the 150 px render, scaled.
+  const earthCache = new Map(); // the hand-drawn fallback Earth (before the NASA maps load), per radius
+  function drawEarth(x, y, r, scale = 1, rot = 0.26) {
+    let img, base = r;
+    if (tex.day) {
+      base = r > 60 && r < 150 ? 150 : r;
+      img = renderEarth(base, rot, base === 150 ? 4 : Infinity); // the turning flight Earth updates over a few frames
+    } else {
+      img = earthCache.get(r);
+      if (!img) {
+        if (earthCache.size > 60) earthCache.clear();
+        img = canvasOf(r * 2 + 16, r * 2 + 16, (c) => paintEarth(c, r + 8, r + 8, r));
+        earthCache.set(r, img);
+      }
+    }
+    const s = img.width * scale * (r / base), smooth = Math.abs(s - img.width) > 0.5;
+    if (smooth) ctx.imageSmoothingEnabled = true; // a scaled photo-like globe looks better smoothed
+    ctx.drawImage(img, Math.round(x - s / 2), Math.round(y - s / 2), Math.round(s), Math.round(s));
+    if (smooth) ctx.imageSmoothingEnabled = false;
+  }
+
   function paintEarth(c, x, y, r) {
     disc(x, y, r + 6, 'rgba(110, 170, 255, 0.25)', true); // atmosphere glow
     disc(x, y, r, '#1e4a9a');
@@ -378,11 +451,12 @@ const MoonRender = (function () {
 
   // Sun glow off the top-right corner, with a faint lens flare across the view.
   let sunImg = null;
+  const bakeSun = () => canvasOf(120, 120, () => {
+    for (let r = 58; r > 12; r -= 3) { ctx.globalAlpha = 0.04 + (1 - r / 58) * 0.2; disc(60, 60, r, '#ffd9a0', true); }
+    ctx.globalAlpha = 1; disc(60, 60, 12, '#fff0cc'); disc(60, 60, 8, '#ffffff');
+  });
   function drawSun(storm, t) {
-    if (!sunImg) sunImg = canvasOf(120, 120, () => {
-      for (let r = 58; r > 12; r -= 3) { ctx.globalAlpha = 0.04 + (1 - r / 58) * 0.2; disc(60, 60, r, '#ffd9a0', true); }
-      ctx.globalAlpha = 1; disc(60, 60, 12, '#fff0cc'); disc(60, 60, 8, '#ffffff');
-    });
+    if (!sunImg) sunImg = bakeSun();
     const sx = 612, sy = 30;
     ctx.drawImage(sunImg, sx - 60, sy - 60);
     if (storm) { ctx.globalAlpha = 0.3 + 0.2 * Math.sin(t * 9); ctx.drawImage(sunImg, sx - 90, sy - 90, 180, 180); ctx.globalAlpha = 1; }
@@ -407,6 +481,7 @@ const MoonRender = (function () {
         }
       }
       g.putImageData(img, 0, 0);
+      for (const m of milky) px(m.x, m.y, 1, 1, m.c); // the Milky Way band is static too
     });
   }
 
@@ -529,7 +604,6 @@ const MoonRender = (function () {
     // Deep space: nebula, Milky Way band, three star layers streaming left (faster during the big burn).
     px(-8, -8, W + 16, H + 16, '#03020a');
     ctx.drawImage(nebImg, 0, 0);
-    for (const s of milky) px(s.x, s.y, 1, 1, s.c);
     const speed = orbit ? 0.3 : dep ? 1 + (1 - du) * 3 : 1;
     for (const s of far) {
       const v = [3, 9, 22][s.l] * speed;
@@ -539,7 +613,7 @@ const MoonRender = (function () {
     }
     drawSun(e && e.kind === 'storm', t);
     // Earth: huge below the ship at departure, then falling behind on the left and shrinking.
-    if (dep) { const k = (1 - du) ** 2; drawEarth(-10 + k * 240, 170 + k * 420, 360, (150 + k * 210) / 360); } // big cached Earth scaled down: no chunky pixels
+    if (dep) { const k = (1 - du) ** 2; drawEarth(-10 + k * 240, 170 + k * 420, 240, (150 + k * 210) / 240); } // one big render, scaled (smoothed)
     else if (!orbit) drawEarth(Math.round(-10 - p * 160), Math.round(170 + p * 40), Math.max(10, Math.round(150 * (1 - p * 0.7))), 1, 0.26 + p * 1.4);
     // Moon growing ahead on the right; in orbit it fades into the close-up ground.
     const mr = Math.round(14 + Math.pow(p, 1.7) * 190);
@@ -683,7 +757,7 @@ const MoonRender = (function () {
   });
   const drawMoonAt = withCtx((x, y, r) => ctx.drawImage(litMoon(), Math.round(x - r), Math.round(y - r), r * 2, r * 2));
 
-  return { drawMap, siteAt, project, icon, drawFlight, setEarthMap, drawEarthAt, drawMoonAt, hudPanel, setEpic, drawEpicAt, W, H };
+  return { drawMap, siteAt, project, icon, drawFlight, setEarthMap, drawEarthAt, drawMoonAt, hudPanel, setEpic, drawEpicAt, prepareEarth, warmUp, W, H };
 })();
 
 if (typeof module !== 'undefined') module.exports = MoonRender;

@@ -54,6 +54,39 @@ const LandingRender = (function () {
     lastT = t;
   }
 
+  // 2x2 checker patterns for the soil just under the surface (made once per canvas context).
+  const ditherCache = new WeakMap();
+  function dithers(g) {
+    let d = ditherCache.get(g);
+    if (d) return d;
+    const mk = (a, b) => { const c = document.createElement('canvas'); c.width = c.height = 2; const q = c.getContext('2d'); q.fillStyle = a; q.fillRect(0, 0, 2, 2); q.fillStyle = b; q.fillRect(0, 0, 1, 1); q.fillRect(1, 1, 1, 1); return g.createPattern(c, 'repeat'); };
+    d = { upper: mk('#3a373e', '#4a464c'), lower: mk('#3a373e', '#36333a') };
+    ditherCache.set(g, d);
+    return d;
+  }
+
+  // Per terrain point (every 2 m): light level from the slope (or -1 = in a shadow cast by higher ground
+  // to the right), the never-lit crater floor, and the lidar's safe/steep marks. Static, so done once.
+  const looks = new WeakMap();
+  function terrainLook(TR, c) {
+    let L = looks.get(TR);
+    if (L) return L;
+    const n = TR.h.length, base = new Float32Array(n), dark = new Uint8Array(n), zone = new Uint8Array(n), steep = new Uint8Array(n);
+    for (let i = 0; i < n; i++) {
+      const wx = i * TR.step, h0 = TR.h[i];
+      let shade = false;
+      for (let d = 2; d <= 70 && !shade; d += 3) if (Landing.heightAt(TR, wx + d) - h0 > d * SUN) shade = true;
+      const sl = Landing.slopeAt(TR, wx);
+      base[i] = shade ? -1 : 3 - sl * 10;
+      dark[i] = TR.shadow && wx > TR.shadow.a && wx < TR.shadow.b ? 1 : 0;
+      zone[i] = Landing.zoneAt(TR, wx) ? 1 : 0;
+      steep[i] = Math.abs(sl) > c.maxSlope ? 1 : 0;
+    }
+    L = { n, base, dark, zone, steep };
+    looks.set(TR, L);
+    return L;
+  }
+
   function draw(context, t, s) {
     ctx = context;
     ctx.imageSmoothingEnabled = false;
@@ -74,45 +107,57 @@ const LandingRender = (function () {
     px(0, 0, W, H, '#05040c');
     for (const st of stars) px((st.x - cam.x * 0.02 + W * 10) % W, st.y, 1, 1, st.b > 0.7 ? '#ffffff' : '#7a76a8');
     if (MoonRender.drawEarthAt) MoonRender.drawEarthAt(ctx, 470, 74, 18);
+    const B = new Map(); // colour (or pattern) -> rectangles, filled in one go each (far fewer canvas calls)
+    const add = (col, x, y, w, h) => { let a = B.get(col); if (!a) B.set(col, (a = [])); a.push(x, y, w, h); };
+    const flush = () => { for (const [col, r] of B) { ctx.fillStyle = col; ctx.beginPath(); for (let q = 0; q < r.length; q += 4) ctx.rect(r[q], r[q + 1], r[q + 2], r[q + 3]); ctx.fill(); } B.clear(); };
+    // Each layer is painted only down to where the next one (nearer) starts: no hidden overdraw.
+    const gys = new Float32Array(W / 2), near = new Float32Array(W / 2);
+    for (let sx = 0; sx < W; sx += 2) { gys[sx / 2] = Math.round(SY(Landing.heightAt(TR, WX(sx + 1)))); near[sx / 2] = Math.round(BASE - 34 - ridge(sx + cam.x * 0.22 + 34 * 7) * 0.55); }
     for (const [par, lift, amp, base, lit, top] of [[0.06, 64, 0.9, '#1d1b21', '#3a373d', '#5a565a'], [0.22, 34, 0.55, '#2a272d', '#4c484e', '#77726f']]) {
       for (let sx = 0; sx < W; sx += 2) {
         const u = sx + cam.x * par + lift * 7, y = Math.round(BASE - lift - ridge(u) * amp);
         const faceSun = ridge(u + 2) < ridge(u); // the ground drops to the right: faces the low Sun
-        px(sx, y, 2, H - y, base);
-        if (faceSun) { px(sx, y, 2, 3, lit); px(sx + ((y >> 1) & 1), y + 3, 1, 2, lit); }
-        px(sx, y, 2, 1, faceSun ? top : lit);
+        const stop = Math.min(gys[sx / 2], lift === 64 ? near[sx / 2] : H);
+        if (stop > y) add(base, sx, y, 2, stop - y);
+        if (faceSun) { add(lit, sx, y, 2, 3); add(lit, sx + ((y >> 1) & 1), y + 3, 1, 2); }
+        add(faceSun ? top : lit, sx, y, 2, 1);
       }
+      flush(); // far layer first, then the near one over it
     }
 
     // Ground: one column every 2 px. Colour from the slope (facing the Sun = bright) with grain, shadows
     // from the terrain to the right, then the soil below with buried rocks. Ice sites: a never-lit floor.
     const reveal = Math.min(1, s.t / c.scanTime) * c.length; // lidar has mapped the ground left of this
     const hash = (n) => (Math.imul((n | 0) ^ 0x5bd1e995, 2654435761) >>> 0) / 4294967296;
-    const shadeOf = (wx) => {
-      const h0 = Landing.heightAt(TR, wx);
-      for (let d = 2; d <= 70; d += 3) if (Landing.heightAt(TR, wx + d) - h0 > d * SUN) return 0;
-      const sl = Landing.slopeAt(TR, wx);
-      return Math.max(1, Math.min(5, Math.round(3 - sl * 10 + (hash(Math.floor(wx * 1.5)) - 0.5) * 1.2)));
-    };
+    const tc = terrainLook(TR, c); // shading, shadows and lidar marks per terrain point, worked out once
+    const at = (wx) => Math.max(0, Math.min(tc.n - 1, Math.round(wx / TR.step)));
     const GREYS = ['#1e1c22', '#3e3b40', '#5e5a5e', '#7f7a7c', '#a29c9c', '#c6c0bc'];
     const soilTop = Math.max(2, Math.round(1.5 * k)), soilMid = Math.max(6, Math.round(5 * k));
+    const dith = dithers(ctx);
     for (let sx = 0; sx < W; sx += 2) {
-      const wx = WX(sx + 1);
-      const y = Math.round(SY(Landing.heightAt(TR, wx)));
-      const dark = TR.shadow && wx > TR.shadow.a && wx < TR.shadow.b;
-      const sh = dark ? -1 : shadeOf(wx);
-      px(sx, y, 2, soilTop, dark ? '#100f1a' : GREYS[sh]);
-      if (sh >= 3) px(sx, y, 2, 1, GREYS[Math.min(5, sh + 1)]); // sunlit crest
-      for (let d = 0; d < soilMid; d += 2) px(sx + ((d >> 1) & 1), y + soilTop + d, 1, 2, dark ? '#0c0b14' : (d / soilMid < 0.5 ? '#4a464c' : '#36333a')); // dithered fade
-      px(sx + 1 - (((soilMid >> 1) & 1)), y + soilTop, 1, soilMid, dark ? '#0a0912' : '#3a373e');
-      px(sx, y + soilTop + soilMid, 2, H - y, dark ? '#08070e' : '#242128');
-      if (dark && hash(Math.floor(wx * 3) + 77) < 0.05) px(sx, y, 1, 1, '#9ad6ff'); // ice glints
+      const wx = WX(sx + 1), i = at(wx);
+      const y = gys[sx / 2];
+      const dark = tc.dark[i];
+      const sh = dark ? -1 : tc.base[i] < 0 ? 0 : Math.max(1, Math.min(5, Math.round(tc.base[i] + (hash(Math.floor(wx * 1.5)) - 0.5) * 1.2)));
+      add(dark ? '#100f1a' : GREYS[sh], sx, y, 2, soilTop);
+      if (sh >= 3) add(GREYS[Math.min(5, sh + 1)], sx, y, 2, 1); // sunlit crest
+      const half = soilMid >> 1; // dithered fade from the surface colour into the soil (checker patterns)
+      add(dark ? '#0b0a13' : dith.upper, sx, y + soilTop, 2, half);
+      add(dark ? '#0b0a13' : dith.lower, sx, y + soilTop + half, 2, soilMid - half);
+      if (dark) add('#08070e', sx, y + soilTop + soilMid, 2, H - y);
+      if (dark && hash(Math.floor(wx * 3) + 77) < 0.05) add('#9ad6ff', sx, y, 1, 1); // ice glints
       // Lidar marks: green over safe pads, red dots over hazards.
       if (wx < reveal && !s.alarm) {
-        if (Landing.zoneAt(TR, wx)) px(sx, y - 2, 2, 1, '#4dffc3');
-        else if (Math.abs(Landing.slopeAt(TR, wx)) > c.maxSlope && (sx / 2) % 3 === 0) px(sx, y - 2, 1, 1, '#ff4d6a');
+        if (tc.zone[i]) add('#4dffc3', sx, y - 2, 2, 1);
+        else if (tc.steep[i] && (sx / 2) % 3 === 0) add('#ff4d6a', sx, y - 2, 1, 1);
       }
     }
+    // Deep soil: one shape under the whole ground line instead of a tall rectangle per column.
+    ctx.fillStyle = '#242128';
+    ctx.beginPath(); ctx.moveTo(0, H);
+    for (let sx = 0; sx < W; sx += 2) { const yy = gys[sx / 2] + soilTop + soilMid; ctx.lineTo(sx, yy); ctx.lineTo(sx + 2, yy); }
+    ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
+    flush();
     // Close up: pebbles on the surface and rocks buried in the soil, fixed to the ground (hashed per metre).
     if (k > 0.9) {
       const dens = 0.12 + s.site.roughness * 0.25;

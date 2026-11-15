@@ -204,14 +204,28 @@ const PixelText = (function () {
     const t = clean(String(text));
     const w = measure(t) * scale;
     let cx = Math.round(align === 'center' ? x - w / 2 : align === 'right' ? x - w : x);
-    ctx.fillStyle = color;
+    const yy = Math.round(y);
     for (const ch of t) {
       const gl = glyph(ch);
-      gl.forEach((row, ry) => {
-        for (let i = 0; i < row.length; i++) if (row[i] === '#') ctx.fillRect(cx + i * scale, Math.round(y) + ry * scale, scale, scale);
-      });
+      if (ch !== ' ') ctx.drawImage(glyphImage(ch, gl, color, scale), cx, yy);
       cx += (gl[0].length + 1) * scale;
     }
+  }
+  // Each letter is drawn once per colour and size into a tiny canvas, then reused: one drawImage per
+  // letter instead of a fillRect per lit pixel (HUDs draw hundreds of letters every frame).
+  const glyphCache = new Map();
+  function glyphImage(ch, gl, color, scale) {
+    const key = `${ch}|${color}|${scale}`;
+    let c = glyphCache.get(key);
+    if (c) return c;
+    if (glyphCache.size > 3000) glyphCache.clear(); // shortcut: whole-cache reset, fine for a few hundred live keys
+    c = document.createElement('canvas');
+    c.width = Math.max(1, gl[0].length * scale); c.height = gl.length * scale;
+    const g = c.getContext('2d');
+    g.fillStyle = color;
+    gl.forEach((row, ry) => { for (let i = 0; i < row.length; i++) if (row[i] === '#') g.fillRect(i * scale, ry * scale, scale, scale); });
+    glyphCache.set(key, c);
+    return c;
   }
 
   // Typewriter text straight onto its own canvas: no image encoding per letter, so it stays smooth.

@@ -511,6 +511,10 @@
     update();
     startLanding(28, Moon.budget(plan, MOON, MOON_ITEMS).mass, (Math.random() * 1e9) | 0);
   }
+  // Build the flight's fixed art while the player is planning, in the browser's idle time.
+  const idle = window.requestIdleCallback || ((f) => setTimeout(f, 200));
+  const warm = () => { if (MoonRender.warmUp()) idle(warm); };
+  idle(warm);
   let last = performance.now();
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000);
@@ -518,6 +522,7 @@
     if (orbit) {
       Tli.stepTli(orbit, dt, { burn: burnHeld });
       TliRender.draw(mapCtx, now / 1000, orbit);
+      MoonRender.prepareEarth([150, 240]); // build the flight's big Earth a little each frame (no freeze later)
       renderOrbit(dt);
     } else if (launch) {
       Launch.stepLaunch(launch, dt, linput);
