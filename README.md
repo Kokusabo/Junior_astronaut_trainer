@@ -24,6 +24,9 @@ On start the game loads real NASA data, and uses it for random events and facts:
   and landing-site photos from the NASA Image and Video Library
 - Mission 2 launch: steer the gravity turn, fly through Max Q, separate the stages, reach orbit (`src/launch.js`, test shortcut `moon.html#launch`)
 - Mission 2 Earth orbit: the trans-lunar injection burn in the right window, real two-body gravity (`src/tli.js`, test shortcut `moon.html#orbit`)
+- Mission 4 back to Earth (`earth.html`): lift off from the Moon, dock with Orion (`src/dock.js`), burn for Earth, the flight home, re-entry (service module drops, heat shield first), self-opening parachutes you keep upright, and splashdown in the Pacific (`src/reentry.js`)
+- Mission select (centred cards) on the start screen, one saved campaign across all four missions (`src/campaign.js`: stars, Mission 1 fuel bonus into Mission 2), and an optional tutorial (`tutorial.html`): illustrated chapters with live autopilot demos plus five practice drills (lift-off, docking, burn window, landing, re-entry)
+- Mission 3 moonwalks (`surface.html`): three EVAs at the landing site (real LRO terrain), cargo from Mission 2 decides what you can do, ice becomes fuel for the trip home (`src/surface.js`)
 - Mission 2 real NASA extras: EPIC photo of Earth today (DSCOVR), the strongest solar flare of the month (DONKI) sets the storm strength, the closest asteroid flyby (JPL), real LRO LOLA elevation shapes the landing hills (saved copy: `tools/moon-nasa-snapshot.js`)
 - Mission 2 landing: lidar hazard scan, landing point marker, the Apollo 11 1202 alarm and fuel callouts (`src/landing.js`, test shortcut `moon.html#landing=shackleton`)
 - Mission 2 flight Earth: NASA GIBS maps (Blue Marble, Black Marble city lights, and yesterday's MODIS Terra clouds, fetched live; saved copy: `tools/earth-snapshot.js`)

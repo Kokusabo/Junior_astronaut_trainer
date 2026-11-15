@@ -356,15 +356,6 @@ const MoonRender = (function () {
       land.push([lx, ly, cr]);
     }
     for (let dy = -r; dy < -r * 0.82; dy++) { const half = Math.sqrt(r * r - dy * dy); px(x - half, y + dy, half * 2, 1, '#eef4fa'); } // ice cap
-    for (let i = 0; i < 34; i++) { // cloud streaks: small puffs in a short row, dithered edges
-      const a = rnd() * Math.PI * 2, d = rnd() * r * 0.85, cx = x + Math.cos(a) * d, cy = y + Math.sin(a) * d;
-      const pr = Math.max(1, Math.round(r * (0.018 + rnd() * 0.025)));
-      for (let k = 0; k < 6; k++) {
-        const qx = cx + k * pr * 1.6, qy = cy + Math.sin(k * 0.8 + i) * pr * 0.8;
-        if ((qx - x) ** 2 + (qy - y) ** 2 > (r - pr) ** 2) continue;
-        disc(qx, qy, pr + 1, 'rgba(240,245,255,0.5)', true); disc(qx, qy, pr, 'rgba(244,248,255,0.85)');
-      }
-    }
     shadeSphere(c, x, y, r, 0.14);
     seed = 91; // city lights on land in the night side
     for (const [lx, ly, cr] of land) for (let k = 0; k < cr * 2; k++) {
@@ -613,15 +604,17 @@ const MoonRender = (function () {
     }
     drawSun(e && e.kind === 'storm', t);
     // Earth: huge below the ship at departure, then falling behind on the left and shrinking.
-    if (dep) { const k = (1 - du) ** 2; drawEarth(-10 + k * 240, 170 + k * 420, 240, (150 + k * 210) / 240); } // one big render, scaled (smoothed)
-    else if (!orbit) drawEarth(Math.round(-10 - p * 160), Math.round(170 + p * 40), Math.max(10, Math.round(150 * (1 - p * 0.7))), 1, 0.26 + p * 1.4);
+    // Mission 4 (f.home): the same picture with the worlds swapped - the Moon behind, Earth growing ahead.
+    const moonDisc = (x, y, r) => ctx.drawImage(litMoon(), Math.round(x - r), Math.round(y - r), Math.round(r * 2), Math.round(r * 2));
+    if (dep) { const k = (1 - du) ** 2; if (f.home) moonDisc(-10 + k * 240, 170 + k * 420, 150 + k * 210); else drawEarth(-10 + k * 240, 170 + k * 420, 240, (150 + k * 210) / 240); } // one big render, scaled (smoothed)
+    else if (!orbit) { const bx = Math.round(-10 - p * 160), by = Math.round(170 + p * 40), br = Math.max(10, Math.round(150 * (1 - p * 0.7))); if (f.home) moonDisc(bx, by, br); else drawEarth(bx, by, br, 1, 0.26 + p * 1.4); }
     // Moon growing ahead on the right; in orbit it fades into the close-up ground.
     const mr = Math.round(14 + Math.pow(p, 1.7) * 190);
     const mx = Math.round(600 - p * 120), my = Math.round(150 + p * 40);
     if (!orbit || ot < 1.5) {
       const r = Math.round(mr * (1 + ot * 0.8));
       if (orbit) ctx.globalAlpha = Math.max(0, 1 - ot / 1.5);
-      ctx.drawImage(litMoon(), mx - r, my - r, r * 2, r * 2);
+      if (f.home) drawEarth(mx, my, Math.min(150, r), r > 150 ? r / 150 : 1, 0.26 + p * 0.8); else ctx.drawImage(litMoon(), mx - r, my - r, r * 2, r * 2);
       ctx.globalAlpha = 1;
     }
     const dev = e && e.kind === 'burn' ? e.dev : 0;
@@ -693,7 +686,7 @@ const MoonRender = (function () {
     const bx = 196, bw = 228;
     panel(176, 6, 268, 36);
     px(bx, 14, bw, 4, '#1e1a2a'); px(bx, 14, bw * p, 4, '#6fe3ff');
-    disc(bx - 8, 16, 5, '#3a7bd5'); disc(bx + bw + 8, 16, 5, '#a8a6b0');
+    disc(bx - 8, 16, 5, f.home ? '#a8a6b0' : '#3a7bd5'); disc(bx + bw + 8, 16, 5, f.home ? '#3a7bd5' : '#a8a6b0'); // from / to
     px(bx - 2 + bw * p, 10, 4, 12, '#ffffff');
     T(`DAY ${(p * 3).toFixed(1)} OF 3`, bx, 26, '#8a84b0');
     T(`${Math.round(((1 - p) * (distanceKm || 384400)) / 1000)}K KM TO GO`, bx + bw, 26, '#8a84b0', 1, 'right');
@@ -701,8 +694,8 @@ const MoonRender = (function () {
     // Event banner with a timer ring.
     const cx = 310;
     if (dep) {
-      T('GOODBYE, EARTH', cx, 58, '#6fe3ff', 2, 'center');
-      T('UPPER STAGE SEPARATED. SOLAR WINGS OPEN.', cx, 78, '#8a84b0', 1, 'center');
+      T(f.home ? 'GOODBYE, MOON' : 'GOODBYE, EARTH', cx, 58, '#6fe3ff', 2, 'center');
+      T(f.home ? 'ON OUR WAY HOME. EARTH IS 384,400 KM AWAY.' : 'UPPER STAGE SEPARATED. SOLAR WINGS OPEN.', cx, 78, '#8a84b0', 1, 'center');
       drawEpicAt(ctx, 560, 196, 60);
     } else if (e) {
       const label = { burn: 'COURSE CORRECTION', storm: 'SOLAR PARTICLE STORM', meteor: 'MICROMETEOROID IMPACT', brake: 'LUNAR ORBIT INSERTION' }[e.kind];
@@ -757,7 +750,7 @@ const MoonRender = (function () {
   });
   const drawMoonAt = withCtx((x, y, r) => ctx.drawImage(litMoon(), Math.round(x - r), Math.round(y - r), r * 2, r * 2));
 
-  return { drawMap, siteAt, project, icon, drawFlight, setEarthMap, drawEarthAt, drawMoonAt, hudPanel, setEpic, drawEpicAt, prepareEarth, warmUp, W, H };
+  return { shipSprite: () => shipImg || (shipImg = bakeShip()), SHIP_ORIGIN: SC, drawMap, siteAt, project, icon, drawFlight, setEarthMap, drawEarthAt, drawMoonAt, hudPanel, setEpic, drawEpicAt, prepareEarth, warmUp, W, H };
 })();
 
 if (typeof module !== 'undefined') module.exports = MoonRender;

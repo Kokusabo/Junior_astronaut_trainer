@@ -29,11 +29,12 @@ const TliRender = (function () {
     const moonRs = rs(c.moonR, c);
     for (let a = 0; a < Math.PI * 2; a += 0.012) if (Math.floor(a / 0.012) % 4 === 0) px(EC.x + Math.cos(a) * moonRs, EC.y + Math.sin(a) * moonRs, 1, 1, '#3a3660');
     const [mx, my] = toScreen(c.moonR * Math.cos(c.moonAngle), c.moonR * Math.sin(c.moonAngle), c);
-    if (MoonRender.drawMoonAt) MoonRender.drawMoonAt(ctx, mx, my, 14);
-    T('MOON', mx, my + 20, '#a8a6b0', 1, 'center');
+    const home = c.center === 'moon'; // Mission 4: the Moon in the middle, Earth is the target
+    if (home) MoonRender.drawEarthAt(ctx, mx, my, 14); else if (MoonRender.drawMoonAt) MoonRender.drawMoonAt(ctx, mx, my, 14);
+    T(home ? 'EARTH' : 'MOON', mx, my + 20, '#a8a6b0', 1, 'center');
     T('384,400 KM', mx, my + 30, '#6a64a0', 1, 'center');
     // Earth with its thin atmosphere, the low orbit ring and the burn window.
-    if (MoonRender.drawEarthAt) MoonRender.drawEarthAt(ctx, EC.x, EC.y, ER);
+    if (home) MoonRender.drawMoonAt(ctx, EC.x, EC.y, ER); else if (MoonRender.drawEarthAt) MoonRender.drawEarthAt(ctx, EC.x, EC.y, ER);
     const r0 = rs(c.r0, c), wa = Tli.windowAngle(c);
     for (let a = 0; a < Math.PI * 2; a += 0.04) px(EC.x + Math.cos(a) * r0, EC.y + Math.sin(a) * r0, 1, 1, 'rgba(111,227,255,0.35)');
     const pulse = 0.6 + 0.4 * Math.sin(t * 5);
@@ -74,9 +75,9 @@ const TliRender = (function () {
   }
 
   function hud(t, s, el) {
-    const c = s.cfg, need = 3.15; // km/s the TLI burn needs, about
+    const c = s.cfg, need = c.needKms || 3.15; // km/s the burn needs, about
     MoonRender.hudPanel(ctx, 6, 6, 172, 76);
-    T('EARTH ORBIT', 12, 12, '#6fe3ff');
+    T(c.orbitName || 'EARTH ORBIT', 12, 12, '#6fe3ff');
     T(`ALT   ${Math.round((el.r - 1) * c.earthKm).toLocaleString('en-US')} KM`, 12, 24, '#c8c4f0');
     T(`SPEED ${(el.speed * c.vUnit).toFixed(2)} KM/S`, 12, 36, '#c8c4f0');
     T('BURN', 12, 50, '#8a84b0');
@@ -88,14 +89,14 @@ const TliRender = (function () {
     const cx = 400, blink = Math.floor(t * 3) % 4 !== 0;
     if (s.status === 'orbit') {
       if (s.cutoff) T('ENGINE CUTOFF: ON THE WAY!', cx, 18, '#4dffc3', 2, 'center');
-      else if (s.burning) T('TRANS-LUNAR INJECTION', cx, 18, '#ffd34d', 2, 'center');
+      else if (s.burning) T(c.center === 'moon' ? 'TRANS-EARTH INJECTION' : 'TRANS-LUNAR INJECTION', cx, 18, '#ffd34d', 2, 'center');
       else if (wi === 0) { if (blink) T('BURN NOW! HOLD SPACE', cx, 18, '#4dffc3', 2, 'center'); }
       else if (s.dv > 0.02) T('KEEP BURNING ON THE NEXT LAP', cx, 22, '#ffd34d', 1, 'center');
       else T('WAIT FOR THE GREEN WINDOW, THEN HOLD BURN', cx, 22, '#8a84b0', 1, 'center');
     } else {
       const r = s.result;
       MoonRender.hudPanel(ctx, cx - 150, 10, 300, 56);
-      T(r.hit ? 'PATH SET FOR THE MOON' : 'PATH A BIT OFF', cx, 18, r.hit ? '#4dffc3' : '#ff9a3d', 2, 'center');
+      T(r.hit ? `PATH SET FOR ${c.center === 'moon' ? 'EARTH' : 'THE MOON'}` : 'PATH A BIT OFF', cx, 18, r.hit ? '#4dffc3' : '#ff9a3d', 2, 'center');
       T(r.why.toUpperCase(), cx, 40, '#c8c4f0', 1, 'center');
       T(r.penalty > 2 ? 'EXPECT A BIGGER COURSE CORRECTION' : 'ONLY A SMALL COURSE CORRECTION NEEDED', cx, 52, r.penalty > 4 ? '#ff9a3d' : '#8a84b0', 1, 'center');
     }

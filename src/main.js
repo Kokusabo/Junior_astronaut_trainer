@@ -926,7 +926,10 @@
       $('end-msg').textContent = `Time left ${fmt(state.timeLeft)} \u00b7 Stability ${Math.round(state.stability)} \u00b7 Fuel ${Math.round(state.fuel)}`
         + (last ? (state.lucky ? '. You launched into NO-GO weather and got lucky.' : '') : '. Stability and fuel carry over to the next stage.');
       btn.textContent = last ? 'Fly again' : 'Next stage';
+      $('end-moon').hidden = !last; // the rocket is up: on to Mission 2
+      if (last) Campaign.save({ stars: { m1: state.stars }, m1: { fuel: state.fuel, stability: state.stability } });
     } else {
+      $('end-moon').hidden = true;
       $('end-kicker').textContent = 'LAUNCH SCRUBBED';
       $('end-title').textContent = 'Mission control calls a hold';
       $('end-msg').textContent = `${state.reason} Retry starts with the stability and fuel you had when this stage began.`;
@@ -1236,8 +1239,15 @@
   }
   $('boot-start').addEventListener('click', startMission);
   $('boot-skip').addEventListener('click', startMission);
-  // Test shortcut until mission 2 is linked from mission 1's ending.
-  $('boot-moon').addEventListener('click', () => { location.href = 'moon.html'; });
+  // Mission select: centred cards with the saved stars. Card 1 starts Mission 1 right here.
+  const saved = Campaign.get();
+  for (const card of document.querySelectorAll('.mission-card')) {
+    const n = card.dataset.m, got = saved.stars['m' + n];
+    card.querySelector('.card-stars').textContent = got ? '\u2605'.repeat(got) : 'NO STARS YET';
+    if (card.dataset.m === '1') card.addEventListener('click', (e) => { e.preventDefault(); startMission(); });
+  }
+  $('boot-trip').textContent = `Trip stars: ${Campaign.total()} of 12`;
+  $('end-moon').addEventListener('click', () => { location.href = 'moon.html'; });
 
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000);

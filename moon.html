@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Mission 2: To the Moon</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body class="fit-screen">
   <main class="game moon">
@@ -14,7 +14,8 @@
         <p id="level-name" class="px">Plan the trip: the landing site and the cargo share one fuel tank</p>
       </div>
       <div class="top-btns">
-        <button id="back-btn" class="icon-btn px">Mission 1</button>
+        <a id="help-btn" class="icon-btn px" href="tutorial.html">Help</a>
+        <button id="back-btn" class="icon-btn px">Menu</button>
         <button id="mute-btn" class="icon-btn px" aria-label="Toggle sound">SOUND ON</button>
       </div>
     </header>
@@ -130,7 +131,7 @@
           <button id="go-btn" class="px go-btn" hidden>GO on the alarm</button>
           <p class="pxw flight-keys land-keys">Keys: UP or SPACE = engine, LEFT and RIGHT = tilt, G = GO</p>
           <div class="landing-end" hidden>
-            <button id="mission3-btn" class="primary px" disabled>Mission 3 (soon)</button>
+            <button id="mission3-btn" class="primary px">Mission 3: Moonwalk</button>
             <button id="retry-land-btn" class="px">Try the landing again</button>
             <button id="replan2-btn" class="px">Plan again</button>
           </div>
@@ -150,21 +151,22 @@
     <footer id="credits">Earth-Moon distance: NASA JPL Horizons. Earth: NASA GIBS (Blue Marble, Black Marble, MODIS Terra clouds) and EPIC (DSCOVR). Solar flares: NASA DONKI. Asteroids: NASA JPL. Moon terrain: NASA LRO LOLA via Moon Trek. Site photos: NASA Image and Video Library. Art and sound generated in code.</footer>
   </main>
 
-  <script src="src/sfx.js"></script>
-  <script src="src/pixeltext.js"></script>
-  <script src="src/render.js"></script>
-  <script src="src/moon-data.js"></script>
-  <script src="src/moon.js"></script>
-  <script src="data/earth-maps.js"></script>
-  <script src="data/moon-nasa.js"></script>
-  <script src="src/moon-render.js"></script>
-  <script src="src/launch.js"></script>
-  <script src="src/launch-render.js"></script>
-  <script src="src/tli.js"></script>
-  <script src="src/tli-render.js"></script>
-  <script src="src/landing.js"></script>
-  <script src="src/landing-render.js"></script>
-  <script src="data/horizons-moon.js"></script>
-  <script src="src/moon-main.js"></script>
+  <script src="src/campaign.js?v=7"></script>
+  <script src="src/sfx.js?v=7"></script>
+  <script src="src/pixeltext.js?v=7"></script>
+  <script src="src/render.js?v=7"></script>
+  <script src="src/moon-data.js?v=7"></script>
+  <script src="src/moon.js?v=7"></script>
+  <script src="data/earth-maps.js?v=7"></script>
+  <script src="data/moon-nasa.js?v=7"></script>
+  <script src="src/moon-render.js?v=7"></script>
+  <script src="src/launch.js?v=7"></script>
+  <script src="src/launch-render.js?v=7"></script>
+  <script src="src/tli.js?v=7"></script>
+  <script src="src/tli-render.js?v=7"></script>
+  <script src="src/landing.js?v=7"></script>
+  <script src="src/landing-render.js?v=7"></script>
+  <script src="data/horizons-moon.js?v=7"></script>
+  <script src="src/moon-main.js?v=7"></script>
 </body>
 </html>

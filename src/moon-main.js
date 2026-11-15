@@ -2,6 +2,8 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   const plan = { site: null, items: new Set(), distanceKm: MOON.meanDistanceKm };
+  const m1 = Campaign.get().m1; // what Mission 1 left in the tank
+  if (m1) plan.bonus = Math.round(m1.fuel / 10);
   // Real NASA numbers for the flight story (saved copy; replaced by live data when it arrives).
   const nasa = { flare: typeof MOON_NASA !== 'undefined' ? MOON_NASA.flare : null, asteroid: typeof MOON_NASA !== 'undefined' ? MOON_NASA.asteroid : null };
 
@@ -387,6 +389,11 @@
   $('land-btn').addEventListener('click', () => { if (flight && flight.status === 'orbit') startLanding(flight.fuel, flight.mass, (Math.random() * 1e9) | 0); });
   $('retry-land-btn').addEventListener('click', () => startLanding(landStart.fuel, landStart.mass, landStart.seed));
   $('replan2-btn').addEventListener('click', backToPlanning);
+  // On to Mission 3 with what we brought and the fuel left after touchdown.
+  $('mission3-btn').addEventListener('click', () => {
+    if (!landing || (landing.status !== 'landed' && landing.status !== 'hard')) return;
+    location.href = `surface.html?site=${plan.site.id}&items=${[...plan.items].join(',')}&fuel=${landing.fuel.toFixed(1)}&hard=${landing.status === 'hard' ? 1 : 0}`;
+  });
   const goAlarm = () => { if (landing && Landing.ackAlarm(landing)) { Sfx.go(); say('We are GO on that alarm. Continue the descent.', true); } };
   $('go-btn').addEventListener('click', goAlarm);
   for (const [id, key] of [['left-btn', 'left'], ['thrust-btn', 'thrust'], ['right-btn', 'right']]) {
@@ -420,10 +427,12 @@
       landSeen.status = s.status;
       input.thrust = input.left = input.right = false;
       document.querySelector('.landing-end').hidden = false;
+      $('mission3-btn').hidden = s.status !== 'landed' && s.status !== 'hard'; // only after a landing
       document.querySelector('.land-pad').hidden = true;
       const r = s.result;
       if (s.status === 'landed' || s.status === 'hard') {
         Sfx.win();
+        Campaign.save({ stars: { m2: r.stars }, m2: { site: plan.site.id, fuel: s.fuel, hard: s.status === 'hard' } });
         say(`${plan.site.name} here. The lander has landed! ${r.stars} star${r.stars > 1 ? 's' : ''}, ${Math.round(s.fuel)} percent fuel left.${r.ice ? ' We are right next to the ice crater: bonus science!' : ''}${s.status === 'hard' ? ' A leg is bent, but the crew is safe.' : ''}`, true);
       } else {
         (s.status === 'crash' ? Sfx.crash : Sfx.lose)();
@@ -473,14 +482,14 @@
     });
 
   // ---------- Sound toggle and frame loop ----------
-  $('back-btn').addEventListener('click', () => { location.href = 'index.html'; });
+  $('back-btn').addEventListener('click', () => { location.href = 'index.html#menu'; });
   const muteBtn = $('mute-btn');
   const muteLabel = () => { muteBtn.textContent = Sfx.isMuted() ? 'SOUND OFF' : 'SOUND ON'; };
   muteLabel();
   muteBtn.addEventListener('click', () => { Sfx.toggle(); muteLabel(); });
   document.addEventListener('pointerdown', () => Sfx.unlock(), { once: true });
 
-  say('Flight control to crew. Welcome to mission 2. Pick a landing site and pack the lander. Every kilogram costs fuel, and you need fuel left to land.', true);
+  say(`Flight control to crew. Welcome to mission 2.${m1 ? ` Mission 1 left us ${Math.round(m1.fuel)} percent fuel, so we start with a ${plan.bonus} percent bonus.` : ''} Pick a landing site and pack the lander. Every kilogram costs fuel, and you need fuel left to land.', true);
   update();
   // Real clouds on the flight Earth: yesterday's MODIS Terra photos from NASA GIBS (saved copy as fallback).
   (function liveClouds() {

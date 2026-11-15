@@ -13,8 +13,13 @@ const TLI = {
   lead: 0.17,         // the window sits this far before the far side, so a burn started in it is centred there
   leaveR: 4,          // past this the ship has left Earth: the phase ends
   firstWindow: 6,     // game seconds until the first burn window
-  earthKm: 6371, vUnit: 7.905,
+  earthKm: 6371, vUnit: 7.905, // radius of the body in the middle (km), its orbit speed unit (km/s)
+  needKms: 3.15, maxDv: Infinity, targetName: 'the Moon', center: 'earth', orbitName: 'EARTH ORBIT',
 };
+
+// Mission 4: the same burn from low lunar orbit back to Earth (trans-Earth injection). Units: Moon radii (1737 km),
+// orbit speed unit 1.68 km/s; Earth is 221 Moon radii away.
+const TEI = Object.assign({}, TLI, { r0: 1.06, moonR: 221, earthKm: 1737, vUnit: 1.68, needKms: 0.67, targetName: 'Earth', center: 'moon', orbitName: 'LUNAR ORBIT' });
 
 const Tli = (function () {
   const simPerGame = (c) => (2 * Math.PI * Math.pow(c.r0, 1.5)) / c.period;
@@ -59,6 +64,7 @@ const Tli = (function () {
           const a = -1 / (2 * en), rv = s.x * s.vx + s.y * s.vy, ex = (v2 - 1 / r) * s.x - rv * s.vx, ey = (v2 - 1 / r) * s.y - rv * s.vy;
           if (a * (1 + Math.hypot(ex, ey)) >= c.moonR) { s.cutoff = true; s.burning = false; finish(s); return; } // the path is set: done
         }
+        if (s.dv >= c.maxDv) { s.cutoff = true; s.burning = false; s.outOfFuel = true; finish(s); return; } // tank empty: the path stays short
       }
       s.vx += ax * h; s.vy += ay * h; // semi-implicit Euler: keeps orbits stable
       s.x += s.vx * h; s.y += s.vy * h;
@@ -75,7 +81,7 @@ const Tli = (function () {
     if (el.e >= 1) return { penalty: 10, hit: false, distErr: Infinity, angErr: 0, why: 'too fast: the ship would fly past the Moon' };
     const distErr = Math.abs(el.ra - c.moonR) / c.moonR, angErr = Math.abs(wrap(el.apoAngle - c.moonAngle)) * (180 / Math.PI);
     const penalty = Math.min(12, Math.round(Math.max(0, distErr - 0.05) * 40 + Math.max(0, angErr - 5) / 2.5)); // small misses are free
-    const why = el.ra < c.moonR * 0.9 ? 'too slow: the orbit falls short of the Moon' : el.ra > c.moonR * 1.1 ? 'too fast: the orbit goes past the Moon' : penalty > 1 ? (wrap(el.apoAngle - c.moonAngle) > 0 ? `burned ${penalty > 3 ? '' : 'a bit '}late: the path swings ahead of the Moon` : `burned ${penalty > 3 ? '' : 'a bit '}early: the path swings behind the Moon`) : 'right on target';
+    const why = el.ra < c.moonR * 0.9 ? `too slow: the orbit falls short of ${c.targetName}` : el.ra > c.moonR * 1.1 ? `too fast: the orbit goes past ${c.targetName}` : penalty > 1 ? (wrap(el.apoAngle - c.moonAngle) > 0 ? `burned ${penalty > 3 ? '' : 'a bit '}late: the path swings ahead of ${c.targetName}` : `burned ${penalty > 3 ? '' : 'a bit '}early: the path swings behind ${c.targetName}`) : 'right on target';
     return { penalty, hit: penalty <= 2, distErr, angErr, why };
   }
   function finish(s) {
@@ -110,4 +116,4 @@ const Tli = (function () {
   return { startTli, stepTli, elements, judge, windowIn, windowAngle, predict };
 })();
 
-if (typeof module !== 'undefined') module.exports = { TLI, Tli };
+if (typeof module !== 'undefined') module.exports = { TLI, TEI, Tli };

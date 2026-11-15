@@ -12,7 +12,7 @@ const Moon = (function () {
     const siteCost = plan.site ? reachCost(plan.site, cfg, plan.distanceKm) : 0;
     const cargoCost = mass * cfg.fuelPerKg;
     const maneuvers = cfg.maneuvers || 0;
-    const fuelLeft = 100 - siteCost - cargoCost - maneuvers;
+    const fuelLeft = 100 - siteCost - cargoCost - maneuvers + (plan.bonus || 0); // bonus: spare fuel carried over from Mission 1
     const missing = items.filter((it) => it.essential && !plan.items.has(it.id)).map((it) => it.name);
     const problems = [];
     if (!plan.site) problems.push('Pick a landing site.');
@@ -90,12 +90,14 @@ const Moon = (function () {
   // Brake (lunar orbit insertion): speed starts at 1 and must end inside this window to be captured.
   const CAPTURE = { lo: 0.35, hi: 0.55 };
 
-  function startFlight(plan, b, rng, reserve = 15) {
+  // opts (Mission 4, the flight home): { events, duration, home: true } - home flights never end in a loss.
+  function startFlight(plan, b, rng, reserve = 15, opts = {}) {
     return {
       reserve,
       // the burns on the way use the maneuver allowance
       progress: 0, t: 0, fuel: b.fuelLeft + (b.maneuvers || 0), hull: 100, health: 100, dose: 0, mass: b.mass,
       has: (id) => plan.items.has(id), rng, event: null, next: 0, log: [], status: 'flying', reason: '',
+      events: opts.events || FLIGHT.events, duration: opts.duration || FLIGHT.duration, home: !!opts.home,
     };
   }
 
@@ -133,14 +135,14 @@ const Moon = (function () {
     f.departing = false;
     const e = f.event;
     if (!e) {
-      f.progress = Math.min(1, f.progress + dt / FLIGHT.duration);
+      f.progress = Math.min(1, f.progress + dt / f.duration);
       f.dose += FLIGHT.cruiseDose * dt;
-      const ev = FLIGHT.events[f.next];
+      const ev = f.events[f.next];
       if (ev && f.progress >= ev[0]) { f.next++; f.event = newEvent(f, ev[1]); f.event.total = f.event.timeLeft; }
       if (f.progress >= 1) {
         // Reaching the Moon without the landing reserve means the landing cannot be attempted.
         if (f.fuel < f.reserve) { f.status = 'lowfuel'; f.reason = `Lunar orbit reached, but only ${Math.max(0, Math.round(f.fuel))}% fuel is left and the landing needs ${f.reserve}%. Mission aborted.`; }
-        else { f.status = 'orbit'; f.log.push('Lunar orbit reached.'); }
+        else { f.status = 'orbit'; f.log.push(f.home ? 'Earth ahead: get ready for re-entry.' : 'Lunar orbit reached.'); }
       }
       return;
     }
@@ -170,6 +172,7 @@ const Moon = (function () {
         finishEvent(f, false, f.has('repair') ? 'Patch not finished in time: hull -15.' : 'No repair kit: the leak was sealed with tape. Hull -15.');
       }
     }
+    if (f.home) { f.health = Math.max(10, f.health); f.hull = Math.max(10, f.hull); f.fuel = Math.max(0, f.fuel); return; } // the way home never ends in a loss
     if (f.health <= 0) { f.status = 'lost'; f.reason = 'The crew could not continue. Mission aborted.'; }
     else if (f.hull <= 0) { f.status = 'lost'; f.reason = 'The hull failed. Mission aborted.'; }
     else if (f.fuel <= 0) { f.status = 'lost'; f.reason = 'Out of fuel before reaching the Moon.'; }

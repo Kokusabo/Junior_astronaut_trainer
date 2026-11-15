@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tutorial: First Mission</title>
+  <link rel="stylesheet" href="style.css?v=7">
+</head>
+<body class="tutorial">
+  <main class="game">
+    <header class="topbar">
+      <div>
+        <h1 class="px">Tutorial</h1>
+        <p class="px" id="level-name">Optional: learn every mission, then practise</p>
+      </div>
+      <div class="top-btns">
+        <a class="icon-btn px" href="index.html#menu">Menu</a>
+        <button id="mute-btn" class="icon-btn px" aria-label="Toggle sound">SOUND ON</button>
+      </div>
+    </header>
+    <nav id="tut-nav" class="tut-nav" aria-label="Chapters"></nav>
+    <div id="tut-chapters" class="tut-chapters"></div>
+    <section id="drills" class="tut-chapter">
+      <h2 class="px">Practice drills</h2>
+      <p class="pxw">Short games with instant coaching. Finish one to tick it off. Use the keys shown, or the buttons under the picture.</p>
+      <div id="drill-list" class="drill-list"></div>
+      <div class="scene-wrap tut-scene"><canvas id="drill-canvas" width="640" height="360" aria-label="Practice drill"></canvas></div>
+      <p id="drill-coach" class="pxw drill-coach"></p>
+      <div class="land-pad drill-pad">
+        <button id="d-left" class="px">LEFT</button>
+        <button id="d-up" class="px">UP</button>
+        <button id="d-act" class="primary px">ACTION</button>
+        <button id="d-down" class="px">DOWN</button>
+        <button id="d-right" class="px">RIGHT</button>
+      </div>
+      <p id="drill-keys" class="pxw flight-keys"></p>
+      <button id="drill-again" class="px">Try again</button>
+    </section>
+    <footer>Every demo uses the real game code. NASA data: GIBS, EPIC, DONKI, JPL, LRO LOLA. Art and sound generated in code.</footer>
+  </main>
+
+  <script src="src/campaign.js?v=7"></script>
+  <script src="src/sfx.js?v=7"></script>
+  <script src="src/pixeltext.js?v=7"></script>
+  <script src="src/render.js?v=7"></script>
+  <script src="src/moon-data.js?v=7"></script>
+  <script src="src/moon.js?v=7"></script>
+  <script src="data/earth-maps.js?v=7"></script>
+  <script src="data/moon-nasa.js?v=7"></script>
+  <script src="src/moon-render.js?v=7"></script>
+  <script src="src/launch.js?v=7"></script>
+  <script src="src/launch-render.js?v=7"></script>
+  <script src="src/tli.js?v=7"></script>
+  <script src="src/tli-render.js?v=7"></script>
+  <script src="src/landing.js?v=7"></script>
+  <script src="src/landing-render.js?v=7"></script>
+  <script src="src/ascent-render.js?v=7"></script>
+  <script src="src/dock.js?v=7"></script>
+  <script src="src/dock-render.js?v=7"></script>
+  <script src="src/reentry.js?v=7"></script>
+  <script src="src/reentry-render.js?v=7"></script>
+  <script src="src/surface.js?v=7"></script>
+  <script src="src/surface-render.js?v=7"></script>
+  <script src="src/tutorial-content.js?v=7"></script>
+  <script src="src/tutorial.js?v=7"></script>
+</body>
+</html>

@@ -14,6 +14,9 @@ const LandingRender = (function () {
   // Lander sprite, 4 px per metre: 8 m wide, 7 m tall. Origin: between the feet at (16, 27).
   const LW = 32, LH = 28, PPM = 4;
   let lander = null;
+  // Per-landing drawing state: the camera (starts far out, zooms in), blown dust, crash debris, callout timing.
+  let cur = null, lastT = 0, cam = { x: 0, s: 0.36, ref: 0 }, dust = [], debris = [], crashAt = null, calloutAt = { n: 0, t: 0 };
+  function reset(s, t) { cur = s; lastT = t; cam = { x: s.x, s: 0.36, ref: Landing.heightAt(s.T, s.x) }; dust = []; debris = []; crashAt = null; calloutAt = { n: 0, t: 0 }; }
   function bakeLander() {
     const c = document.createElement('canvas');
     c.width = LW; c.height = LH;
@@ -43,16 +46,6 @@ const LandingRender = (function () {
     return c;
   }
 
-  // Distant ridge (parallax), from a few sines.
-  const ridge = (x) => 26 * Math.sin(x / 90) + 14 * Math.sin(x / 37 + 1) + 6 * Math.sin(x / 13 + 2);
-
-  // Camera and particles live here, reset for each new landing.
-  let cur = null, cam = null, dust = [], debris = [], lastT = 0, calloutAt = { n: 0, t: -9 }, crashAt = null;
-  function reset(s, t) {
-    cur = s; dust = []; debris = []; calloutAt = { n: 0, t: -9 }; crashAt = null;
-    cam = { x: s.x, ref: Landing.heightAt(s.T, s.x), s: 0.36 };
-    lastT = t;
-  }
 
   // 2x2 checker patterns for the soil just under the surface (made once per canvas context).
   const ditherCache = new WeakMap();
@@ -87,22 +80,12 @@ const LandingRender = (function () {
     return L;
   }
 
-  function draw(context, t, s) {
-    ctx = context;
-    ctx.imageSmoothingEnabled = false;
-    if (!lander) lander = bakeLander();
-    if (cur !== s) reset(s, t);
-    const dt = Math.min(0.1, Math.max(0, t - lastT)); lastT = t;
-    const c = s.cfg, TR = s.T;
-    // Camera: zoom in as we get lower, look a little ahead of the drift.
-    const want = Math.max(0.36, Math.min(4, 150 / (Math.max(0, s.alt) + 20)));
-    cam.s += (want - cam.s) * Math.min(1, dt * 2);
-    cam.x += (s.x + s.vx * 1.5 - cam.x) * Math.min(1, dt * 3);
-    cam.ref += (Landing.heightAt(TR, s.x) - cam.ref) * Math.min(1, dt * 3);
+  // The world behind the lander: sky, stars, Earth, hills, the ground with its soil, pebbles and boulders.
+  // Shared with the moonwalk (Mission 3). reveal: lidar marks shown left of this x; marks: show them at all.
+  function drawWorld(TR, c, cam, reveal, marks, roughness) {
     const k = cam.s;
     const SX = (wx) => W / 2 + (wx - cam.x) * k, SY = (wy) => BASE - (wy - cam.ref) * k;
     const WX = (sx) => cam.x + (sx - W / 2) / k;
-
     // Sky, stars, Earth hanging over the horizon, two layers of hills lit from the right.
     px(0, 0, W, H, '#05040c');
     for (const st of stars) px((st.x - cam.x * 0.02 + W * 10) % W, st.y, 1, 1, st.b > 0.7 ? '#ffffff' : '#7a76a8');
@@ -110,24 +93,10 @@ const LandingRender = (function () {
     const B = new Map(); // colour (or pattern) -> rectangles, filled in one go each (far fewer canvas calls)
     const add = (col, x, y, w, h) => { let a = B.get(col); if (!a) B.set(col, (a = [])); a.push(x, y, w, h); };
     const flush = () => { for (const [col, r] of B) { ctx.fillStyle = col; ctx.beginPath(); for (let q = 0; q < r.length; q += 4) ctx.rect(r[q], r[q + 1], r[q + 2], r[q + 3]); ctx.fill(); } B.clear(); };
-    // Each layer is painted only down to where the next one (nearer) starts: no hidden overdraw.
-    const gys = new Float32Array(W / 2), near = new Float32Array(W / 2);
-    for (let sx = 0; sx < W; sx += 2) { gys[sx / 2] = Math.round(SY(Landing.heightAt(TR, WX(sx + 1)))); near[sx / 2] = Math.round(BASE - 34 - ridge(sx + cam.x * 0.22 + 34 * 7) * 0.55); }
-    for (const [par, lift, amp, base, lit, top] of [[0.06, 64, 0.9, '#1d1b21', '#3a373d', '#5a565a'], [0.22, 34, 0.55, '#2a272d', '#4c484e', '#77726f']]) {
-      for (let sx = 0; sx < W; sx += 2) {
-        const u = sx + cam.x * par + lift * 7, y = Math.round(BASE - lift - ridge(u) * amp);
-        const faceSun = ridge(u + 2) < ridge(u); // the ground drops to the right: faces the low Sun
-        const stop = Math.min(gys[sx / 2], lift === 64 ? near[sx / 2] : H);
-        if (stop > y) add(base, sx, y, 2, stop - y);
-        if (faceSun) { add(lit, sx, y, 2, 3); add(lit, sx + ((y >> 1) & 1), y + 3, 1, 2); }
-        add(faceSun ? top : lit, sx, y, 2, 1);
-      }
-      flush(); // far layer first, then the near one over it
-    }
-
+    const gys = new Float32Array(W / 2);
+    for (let sx = 0; sx < W; sx += 2) gys[sx / 2] = Math.round(SY(Landing.heightAt(TR, WX(sx + 1))));
     // Ground: one column every 2 px. Colour from the slope (facing the Sun = bright) with grain, shadows
     // from the terrain to the right, then the soil below with buried rocks. Ice sites: a never-lit floor.
-    const reveal = Math.min(1, s.t / c.scanTime) * c.length; // lidar has mapped the ground left of this
     const hash = (n) => (Math.imul((n | 0) ^ 0x5bd1e995, 2654435761) >>> 0) / 4294967296;
     const tc = terrainLook(TR, c); // shading, shadows and lidar marks per terrain point, worked out once
     const at = (wx) => Math.max(0, Math.min(tc.n - 1, Math.round(wx / TR.step)));
@@ -147,20 +116,37 @@ const LandingRender = (function () {
       if (dark) add('#08070e', sx, y + soilTop + soilMid, 2, H - y);
       if (dark && hash(Math.floor(wx * 3) + 77) < 0.05) add('#9ad6ff', sx, y, 1, 1); // ice glints
       // Lidar marks: green over safe pads, red dots over hazards.
-      if (wx < reveal && !s.alarm) {
+      if (wx < reveal && marks) {
         if (tc.zone[i]) add('#4dffc3', sx, y - 2, 2, 1);
         else if (tc.steep[i] && (sx / 2) % 3 === 0) add('#ff4d6a', sx, y - 2, 1, 1);
       }
     }
-    // Deep soil: one shape under the whole ground line instead of a tall rectangle per column.
-    ctx.fillStyle = '#242128';
-    ctx.beginPath(); ctx.moveTo(0, H);
-    for (let sx = 0; sx < W; sx += 2) { const yy = gys[sx / 2] + soilTop + soilMid; ctx.lineTo(sx, yy); ctx.lineTo(sx + 2, yy); }
-    ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
+    // Under the surface: a cut through the Moon's ground. Loose regolith, broken rock (breccia) with stones,
+    // layers of old lava flows, then dark bedrock. Layers follow the ground line and wave a little.
+    const STRATA = [[10, '#2f2c34'], [22, '#2a2730'], [40, '#25222b'], [999, '#1c1a21']]; // depth below the dust (px) -> colour
+    for (let sx = 0; sx < W; sx += 2) {
+      const top = gys[sx / 2] + soilTop + soilMid, wx = WX(sx + 1), wave = Math.round(Math.sin(wx / 23) * 2 + Math.sin(wx / 9) * 1);
+      let y = top;
+      for (const [depth, col] of STRATA) { const y2 = Math.min(H, top + depth + wave); if (y2 > y) { add(col, sx, y, 2, y2 - y); y = y2; } }
+      if (((sx >> 1) + Math.round(wx)) % 5 === 0) add('#3a3741', sx, top + 22 + wave, 2, 1); // lava-flow layer lines
+      if (((sx >> 1) + Math.round(wx * 0.7)) % 7 === 0) add('#302d36', sx, top + 31 + wave, 2, 1);
+    }
     flush();
+    // Stones and pebbles buried at different depths, fixed to the ground; ice crystals near the ice crater.
+    for (let m = Math.floor(WX(0) / 2) - 1; m <= WX(W) / 2 + 1; m++) {
+      const wx = m * 2 + hash(m * 5) * 1.6, sx = SX(wx), gy = SY(Landing.heightAt(TR, wx)) + soilTop + soilMid;
+      for (let layer = 0; layer < 3; layer++) {
+        const hv = hash(m * 31 + layer * 977);
+        if (hv > [0.3, 0.22, 0.12][layer]) continue;
+        const dy = [4, 14, 30][layer] + hash(m * 19 + layer) * [8, 14, 30][layer], r = Math.max(1, Math.round((0.6 + hash(m * 17 + layer) * [1.2, 2.2, 3][layer]) * Math.min(2, k)));
+        if (gy + dy > H) continue;
+        px(sx, gy + dy, r * 2, r, ['#4a464f', '#423e48', '#38353e'][layer]); px(sx, gy + dy, r * 2, 1, ['#5e5a63', '#55515b', '#47434d'][layer]);
+      }
+      if (TR.shadow && wx > TR.shadow.a - 120 && wx < TR.shadow.b + 60 && hash(m * 53) < 0.18) px(sx, gy + 6 + hash(m * 59) * 40, 1, 1, '#9ad6ff'); // ice in the soil
+    }
     // Close up: pebbles on the surface and rocks buried in the soil, fixed to the ground (hashed per metre).
     if (k > 0.9) {
-      const dens = 0.12 + s.site.roughness * 0.25;
+      const dens = 0.12 + roughness * 0.25;
       for (let m = Math.floor(WX(0)) - 1; m <= WX(W) + 1; m++) {
         const gy = SY(Landing.heightAt(TR, m + 0.5)), sx = SX(m + hash(m * 5) * 0.8);
         if (hash(m * 7 + 3) < dens) {
@@ -189,8 +175,28 @@ const LandingRender = (function () {
         px(sx, yy, half, 1, q > 0.6 ? '#c0bab6' : '#8e8886');
         if (j === hgt - 1) px(sx - half * 0.3, yy, half, 1, '#d6d0ca');
       }
-      if (b.x < reveal && b.r > 0.9 && !s.alarm) px(sx - 1, gy - hgt - 5, 2, 2, '#ff4d6a');
+      if (b.x < reveal && b.r > 0.9 && marks) px(sx - 1, gy - hgt - 5, 2, 2, '#ff4d6a');
     }
+  }
+
+  function draw(context, t, s) {
+    ctx = context;
+    ctx.imageSmoothingEnabled = false;
+    if (!lander) lander = bakeLander();
+    if (cur !== s) reset(s, t);
+    const dt = Math.min(0.1, Math.max(0, t - lastT)); lastT = t;
+    const c = s.cfg, TR = s.T;
+    // Camera: zoom in as we get lower, look a little ahead of the drift.
+    const want = Math.max(0.36, Math.min(4, 150 / (Math.max(0, s.alt) + 20)));
+    cam.s += (want - cam.s) * Math.min(1, dt * 2);
+    cam.x += (s.x + s.vx * 1.5 - cam.x) * Math.min(1, dt * 3);
+    cam.ref += (Landing.heightAt(TR, s.x) - cam.ref) * Math.min(1, dt * 3);
+    const k = cam.s;
+    const SX = (wx) => W / 2 + (wx - cam.x) * k, SY = (wy) => BASE - (wy - cam.ref) * k;
+    const WX = (sx) => cam.x + (sx - W / 2) / k;
+
+    const reveal = Math.min(1, s.t / c.scanTime) * c.length; // lidar has mapped the ground left of this
+    drawWorld(TR, c, cam, reveal, !s.alarm, s.site.roughness);
     // Ice label over the shadowed crater.
     if (TR.shadow && reveal > TR.shadow.a) {
       const sx = SX((TR.shadow.a + TR.shadow.b) / 2);
@@ -319,7 +325,13 @@ const LandingRender = (function () {
     rows.forEach((r, j) => { for (let i = 0; i < r.length; i++) if (r[i] === '#') px(x - 4 + i, y - 4 + j, 1, 1, col); });
   }
 
-  return { draw, W, H };
+  // For the moonwalk: draw the world with its own camera ({ x, ref, s }) into a context.
+  const drawWorldAt = (context, TR, c, camera, roughness) => { ctx = context; ctx.imageSmoothingEnabled = false; drawWorld(TR, c, camera, 0, false, roughness); };
+
+  // The landed lander sprite (also used by the moonwalk base). Feet centre at (16, 27).
+  const landerSprite = () => lander || (lander = bakeLander());
+
+  return { draw, drawWorldAt, landerSprite, BASE, W, H };
 })();
 
 if (typeof module !== 'undefined') module.exports = LandingRender;

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>First Mission: On the Ground</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body class="fit-screen">
   <main class="game">
@@ -101,7 +101,14 @@
       <div class="boot-bar"><div></div></div>
       <button id="boot-start" class="primary px" disabled>Loading NASA data...</button>
       <button id="boot-skip" class="icon-btn px">Start without waiting</button>
-      <button id="boot-moon" class="icon-btn px">Test: Mission 2 (Moon)</button>
+      <p id="boot-trip" class="boot-trip px"></p>
+      <nav class="mission-select" aria-label="Choose a mission">
+        <a class="mission-card" data-m="1" href="#"><span class="card-n px">MISSION 1</span><span class="card-t px">Launch prep</span><span class="card-b pxw">Fix the rocket on the pad</span><span class="card-stars px"></span></a>
+        <a class="mission-card" data-m="2" href="moon.html"><span class="card-n px">MISSION 2</span><span class="card-t px">To the Moon</span><span class="card-b pxw">Launch, burn, fly and land</span><span class="card-stars px"></span></a>
+        <a class="mission-card" data-m="3" href="surface.html"><span class="card-n px">MISSION 3</span><span class="card-t px">Moonwalk</span><span class="card-b pxw">Explore on the surface</span><span class="card-stars px"></span></a>
+        <a class="mission-card" data-m="4" href="earth.html"><span class="card-n px">MISSION 4</span><span class="card-t px">Back to Earth</span><span class="card-b pxw">Dock, fly home, splash down</span><span class="card-stars px"></span></a>
+      </nav>
+      <a class="icon-btn px boot-tut" href="tutorial.html">Tutorial: learn how to play</a>
     </div>
   </div>
 
@@ -124,21 +131,23 @@
       <p id="end-stars" class="stars"></p>
       <p id="end-msg" class="pxw"></p>
       <button id="end-btn" class="primary px"></button>
+      <button id="end-moon" class="primary px" hidden>Mission 2: To the Moon</button>
     </div>
   </div>
 
-  <script src="src/config.js"></script>
-  <script src="src/sfx.js"></script>
-  <script src="src/pixeltext.js"></script>
-  <script src="src/failures.js"></script>
-  <script src="src/events.js"></script>
-  <script src="src/weather.js"></script>
-  <script src="data/power-ksc.js"></script>
-  <script src="data/osdr-studies.js"></script>
-  <script src="src/levels.js"></script>
-  <script src="src/minigames.js"></script>
-  <script src="src/game.js"></script>
-  <script src="src/render.js"></script>
-  <script src="src/main.js"></script>
+  <script src="src/config.js?v=7"></script>
+  <script src="src/campaign.js?v=7"></script>
+  <script src="src/sfx.js?v=7"></script>
+  <script src="src/pixeltext.js?v=7"></script>
+  <script src="src/failures.js?v=7"></script>
+  <script src="src/events.js?v=7"></script>
+  <script src="src/weather.js?v=7"></script>
+  <script src="data/power-ksc.js?v=7"></script>
+  <script src="data/osdr-studies.js?v=7"></script>
+  <script src="src/levels.js?v=7"></script>
+  <script src="src/minigames.js?v=7"></script>
+  <script src="src/game.js?v=7"></script>
+  <script src="src/render.js?v=7"></script>
+  <script src="src/main.js?v=7"></script>
 </body>
 </html>

@@ -22,6 +22,14 @@ const LAUNCH = {
   countdown: 3,         // seconds of countdown before liftoff
 };
 
+// Mission 4: lifting off from the Moon in the lander's top stage. One short burn, no air (no Max Q, no break-up),
+// small thruster wobbles, to a low lunar orbit (about 1.7 km/s).
+const MOON_LAUNCH = Object.assign({}, LAUNCH, {
+  stages: [{ name: 'ASCENT STAGE', burn: 12 }], clear: 1, shape: 0.5, orbitSpeed: 1.68, posScale: 14,
+  gust: 20, wobble: 0.5, maxQ: [0, 0], thickAir: 0, targetAlt: 30, minAlt: 8, maxGamma: 25, g: 0.00162,
+  abortTail: 'The computer shut the engine down and set us back down gently. Try the lift-off again.',
+});
+
 const Launch = (function () {
   const total = (c) => c.stages.reduce((a, s) => a + s.burn, 0);
   // Guidance: the pitch the rocket should have after b seconds of burning.
@@ -60,7 +68,7 @@ const Launch = (function () {
     if (s.t < 0) return; // countdown
     const air = s.y < c.thickAir;
     // Wind gusts push the nose around; hardest at Max Q, none above the thick air.
-    const q = s.burnT > c.maxQ[0] && s.burnT < c.maxQ[1] ? 1 : air && s.burnT > c.clear ? 0.35 : 0;
+    const q = s.burnT > c.maxQ[0] && s.burnT < c.maxQ[1] ? 1 : air && s.burnT > c.clear ? 0.35 : c.wobble && s.burnT > c.clear ? c.wobble : 0; // wobble: thruster jitter where there is no air
     s.gust += ((s.rng() - 0.5) * c.gust * 6 * q - s.gust * 1.5) * dt;
     if (s.burnT > c.clear * 0.5) s.pitch += (s.gust + ((input.up ? 1 : 0) - (input.down ? 1 : 0)) * c.pitchRate) * dt;
     s.pitch = Math.max(-10, Math.min(95, s.pitch));
@@ -104,7 +112,7 @@ const Launch = (function () {
 
   function abort(s, reason) {
     s.status = 'abort';
-    s.reason = `${reason} The launch abort system pulled the crew capsule away. The crew is safe.`;
+    s.reason = `${reason} ${s.cfg.abortTail || 'The launch abort system pulled the crew capsule away. The crew is safe.'}`;
     s.events.push({ kind: 'abort', t: s.t });
   }
 
@@ -112,7 +120,8 @@ const Launch = (function () {
   function finish(s) {
     const c = s.cfg, gamma = (Math.atan2(s.vy, s.vx) * 180) / Math.PI;
     s.orbit = { alt: s.y, gamma };
-    if (s.y < 100) return abort(s, `Engine cutoff at only ${Math.round(s.y)} km: too low for orbit.`);
+    if (Math.abs(gamma) > (c.maxGamma || 90)) return abort(s, 'Engine cutoff while still climbing steeply: no sideways speed, so no orbit.');
+    if (s.y < (c.minAlt || 100)) return abort(s, `Engine cutoff at only ${Math.round(s.y)} km: too low for orbit.`);
     s.penalty = Math.min(6, Math.round(s.loss * 3 + s.stageLate + Math.abs(s.y - c.targetAlt) / 30 + Math.abs(gamma) * 0.2)); // at most 6% so one bad launch does not end the mission
     s.status = 'orbit';
     s.events.push({ kind: 'meco', t: s.t });
@@ -127,4 +136,4 @@ const Launch = (function () {
   return { guidePitch, speedAt, stageEnd, idealPath, startLaunch, stepLaunch, separate, missionTime, total };
 })();
 
-if (typeof module !== 'undefined') module.exports = { LAUNCH, Launch };
+if (typeof module !== 'undefined') module.exports = { LAUNCH, MOON_LAUNCH, Launch };

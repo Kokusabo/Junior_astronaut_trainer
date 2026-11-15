@@ -55,8 +55,8 @@ body {
 }
 /* .pxw: wrapped pixel text for sentences; height follows the drawn lines. */
 .pxw { font-size: 0 !important; line-height: 0 !important; display: block; height: var(--pxh, 14px); background-repeat: no-repeat; background-position: left top; background-size: var(--pxw) var(--pxh); image-rendering: pixelated; }
-span.px, p.px, h1.px, h2.px, strong.px, em.px { display: inline-block; width: var(--pxw); height: var(--pxh); padding: 0; }
-p.px, h1.px, h2.px { display: block; }
+span.px, p.px, h1.px, h2.px, h3.px, a.px, strong.px, em.px { display: inline-block; width: var(--pxw); height: var(--pxh); padding: 0; }
+p.px, h1.px, h2.px, h3.px { display: block; }
 
 /* ---------- Frames ---------- */
 .frame, section, .log, .scene-wrap, .overlay-box {
@@ -133,14 +133,14 @@ body.alarm .radio-who { color: var(--bad); }
 @keyframes float-up { from { transform: translateY(6px); opacity: 0; } 15% { opacity: 1; transform: none; } to { transform: translateY(-22px); opacity: 0; } }
 
 /* ---------- Buttons ---------- */
-button {
+button, a.icon-btn {
   font: inherit; color: var(--text); cursor: pointer;
   /* No "fill" here: the pixel-font label is a background image and must not be painted over. */
   border: 6px solid transparent; border-image: var(--f-btn) 3 / 6px stretch;
   background-color: #2e1b4d; background-clip: padding-box; padding: 0 12px;
   min-width: calc(var(--pxw, 0px) + 36px); height: calc(var(--pxh, 14px) + 24px);
 }
-button:hover:not(:disabled) { border-image-source: var(--f-btn-hi); background-color: #3d2566; }
+button:hover:not(:disabled), a.icon-btn:hover { border-image-source: var(--f-btn-hi); background-color: #3d2566; }
 button:active:not(:disabled) { border-image-source: var(--f-btn-down); background-color: #24153d; background-position: center calc(50% + 2px); }
 button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 button:disabled { cursor: default; opacity: 0.45; }
@@ -304,11 +304,12 @@ body.launching .scene-timer, body.launching .scene-wx { display: none; }
 .stars span.off { color: var(--dim); }
 @keyframes star-in { from { transform: scale(0); } to { transform: none; } }
 #end-msg { color: var(--muted); margin: 0 0 12px; background-position: center top; }
-#end-btn { --px: 2; margin-top: 8px; }
+#end-btn, #end-moon { --px: 2; margin-top: 8px; }
+#end-moon[hidden] { display: none; }
 
 /* ---------- Loading screen ---------- */
 .boot { z-index: 70; background: var(--bg); }
-.boot-box { max-width: 560px; text-align: left; }
+.boot-box { max-width: 760px; text-align: left; }
 .boot-box > .px { margin-left: 0; }
 .boot-kicker { color: var(--pink); animation: none; }
 .boot-box h2 { --px: 3; }
@@ -460,7 +461,6 @@ li.px { display: block; width: var(--pxw); height: var(--pxh); }
   body.fit-screen .col-main .scene-wrap { width: min(100%, max(320px, calc((100dvh - 250px) * 16 / 9))); }
 }
 @media (min-width: 920px) and (min-height: 560px) { body.fit-screen { overflow: hidden; } } /* the layout is sized to fit; no stray scrollbar */
-#boot-moon { display: block; margin: 8px auto 0; }
 
 /* Mission 2 flight: the planning panels hide while flying. */
 body.flying .budget, body.flying .cargo-section, body.flying .site-panel { display: none; }
@@ -524,3 +524,37 @@ body.flying #site-card { display: none; }
 
 /* Flying and landing stay full screen even with the one-screen planning layout. */
 body.fit-screen.flying .moon .col-main .scene-wrap { width: auto; justify-self: stretch; }
+body.fit-screen.launching .col-main .scene-wrap { width: auto; justify-self: stretch; } /* full screen beats the one-screen width */
+#mission3-btn[hidden], #patch-btn[hidden] { display: none; }
+
+/* ---------- Mission select (centred) and tutorial link ---------- */
+.boot-trip { color: var(--muted); text-align: center; margin: 14px 0 8px; }
+.mission-select { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 170px)); gap: 10px; justify-content: center; margin: 0 auto 10px; }
+.mission-card { text-decoration: none; display: grid; gap: 4px; justify-items: center; text-align: center; padding: 10px 8px; cursor: pointer; color: var(--text); background: rgba(20, 14, 40, 0.8); border: 3px solid var(--dim); font: inherit; }
+.mission-card:hover, .mission-card:focus-visible { border-color: var(--cyan); transform: translateY(-2px); }
+.mission-card .card-n { color: var(--pink); }
+.mission-card .card-t { --px: 2; color: var(--text); }
+.mission-card .card-b { color: var(--muted); width: 100%; background-position: center top; }
+.mission-card .card-stars { color: var(--accent); }
+.boot-box .boot-tut { display: block; width: fit-content; margin: 8px auto 0; text-decoration: none; }
+.boot-box .boot-trip { margin-left: auto; }
+a.icon-btn { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+.landing-end, .launch-end { justify-items: center; }
+.landing-end .primary { --px: 2; }
+.trip-summary { text-align: center; color: var(--text); margin: 6px 0; }
+
+/* ---------- Tutorial ---------- */
+body.tutorial .game { max-width: 980px; margin: 0 auto; padding-inline: 16px; }
+.tut-nav { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 14px; position: sticky; top: 0; z-index: 5; padding: 6px 0; background: var(--bg); }
+.tut-chapter { margin-bottom: 18px; display: grid; gap: 10px; }
+.tut-chapter > h2 { --px: 3; color: var(--accent); }
+.tut-scene { width: min(100%, 880px); justify-self: center; }
+.tut-scene canvas, #drill-canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+.tut-demo-note { color: var(--muted); text-align: center; }
+.tut-block h3, .tut-fact h3 { --px: 2; color: var(--cyan); margin: 0 0 4px; }
+.tut-fact { border-left: 4px solid var(--pink); padding-left: 10px; }
+.tut-fact h3 { color: var(--pink); }
+.drill-list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.drill-coach { text-align: center; min-height: 28px; --px: 2; color: var(--text); }
+.drill-pad { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+#drill-again { justify-self: center; }

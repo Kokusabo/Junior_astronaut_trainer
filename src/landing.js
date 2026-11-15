@@ -52,10 +52,10 @@ const Landing = (function () {
       for (let i = 0; i < n; i++) {
         const d = Math.abs(i * cfg.step - cx) / R;
         if (d < 1) h[i] -= depth * (1 - d * d);
-        else if (d < 1.6) h[i] += depth * 0.3 * (1 - (d - 1) / 0.6);
+        else if (d < 1.6) h[i] += depth * 0.6 * (1 - (d - 1) / 0.6); // raised rim
       }
     };
-    for (let k = Math.round(3 + rough * 10); k > 0; k--) crater(100 + rng() * (cfg.length - 200), 10 + rng() * 40, 3 + rng() * (4 + rough * 10));
+    for (let k = Math.round(3 + rough * 10); k > 0; k--) crater(100 + rng() * (cfg.length - 200), 18 + rng() * 55, 4 + rng() * (5 + rough * 10));
     // Ice sites: a deep crater whose floor never sees the Sun, near the far end.
     let shadow = null;
     if (site.ice) {

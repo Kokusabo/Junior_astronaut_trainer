@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mission 3: Moonwalk</title>
+  <link rel="stylesheet" href="style.css?v=7">
+</head>
+<body class="fit-screen flying">
+  <main class="game moon">
+    <header class="topbar">
+      <div>
+        <h1 class="px">Mission 3: Moonwalk</h1>
+        <p id="level-name" class="px">Three moonwalks at the landing site</p>
+      </div>
+      <div class="top-btns">
+        <a id="help-btn" class="icon-btn px" href="tutorial.html">Help</a>
+        <button id="back-btn" class="icon-btn px">Menu</button>
+        <button id="mute-btn" class="icon-btn px" aria-label="Toggle sound">SOUND ON</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <div class="col-main">
+        <div class="scene-wrap">
+          <canvas id="map" width="640" height="360" aria-label="Moonwalk at the landing site"></canvas>
+        </div>
+        <section class="radio" aria-live="polite">
+          <canvas id="portrait" width="48" height="48" aria-hidden="true"></canvas>
+          <div class="radio-body">
+            <p class="radio-who px">FLIGHT CONTROL · CH 3</p>
+            <p id="radio"></p>
+            <canvas id="radio-canvas" width="1" height="1" aria-hidden="true"></canvas>
+          </div>
+        </section>
+      </div>
+      <div class="col-side">
+        <section id="eva-panel" class="flight-panel">
+          <h2 class="px">Moonwalk</h2>
+          <p id="eva-text" class="pxw"></p>
+          <div class="land-pad">
+            <button id="left-btn" class="px">LEFT</button>
+            <button id="act-btn" class="primary px">WORK (E)</button>
+            <button id="right-btn" class="px">RIGHT</button>
+          </div>
+          <button id="patch-btn" class="px go-btn" hidden>PATCH LEAK (R)</button>
+          <p class="pxw flight-keys eva-keys">Keys: LEFT and RIGHT walk, SPACE hop, E work (hold E to drill), R patch</p>
+          <div class="landing-end eva-end" hidden>
+            <button id="mission4-btn" class="primary px">Mission 4: back to Earth</button>
+            <button id="again-btn" class="px">Play Mission 3 again</button>
+            <button id="m2-btn" class="px">Mission 2</button>
+          </div>
+        </section>
+      </div>
+    </div>
+    <footer id="credits">Moon terrain: NASA LRO LOLA via Moon Trek. Solar flares: NASA DONKI. Earth: NASA GIBS. Art and sound generated in code.</footer>
+  </main>
+
+  <script src="src/campaign.js?v=7"></script>
+  <script src="src/sfx.js?v=7"></script>
+  <script src="src/pixeltext.js?v=7"></script>
+  <script src="src/render.js?v=7"></script>
+  <script src="src/moon-data.js?v=7"></script>
+  <script src="src/moon.js?v=7"></script>
+  <script src="data/earth-maps.js?v=7"></script>
+  <script src="data/moon-nasa.js?v=7"></script>
+  <script src="src/moon-render.js?v=7"></script>
+  <script src="src/landing.js?v=7"></script>
+  <script src="src/landing-render.js?v=7"></script>
+  <script src="src/surface.js?v=7"></script>
+  <script src="src/surface-render.js?v=7"></script>
+  <script src="src/surface-main.js?v=7"></script>
+</body>
+</html>

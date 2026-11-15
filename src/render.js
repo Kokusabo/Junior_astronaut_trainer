@@ -442,7 +442,7 @@ const Render = (function () {
     px(255, 18, 6, 6, beaconOn ? '#ff4a4a' : '#4a1c1c');
     if (beaconOn) disc(258, 21, 6, 'rgba(255, 74, 74, 0.5)', true);
     // Crew access arm with a lit white room, and a lower vent arm with hoses. Both swing away at liftoff.
-    const reach = (RX - 17) - (x1 + 3);
+    const reach = (RX - 27) - (x1 + 3); // to the left booster
     const len = Math.max(0, reach * armOut);
     if (len > 0) {
       px(x1 + 3, 140, len, 5, '#7a2a34'); px(x1 + 3, 140, len, 1, red);
@@ -485,44 +485,48 @@ const Render = (function () {
   function rocket(y) {
     ctx.drawImage(sprite('rocket', W, H, () => rocketShape(0)), 0, Math.round(y));
   }
+  // The same rocket as in Mission 2 (src/launch-render.js), drawn bigger: abort tower, capsule fairing,
+  // white upper stage, orange core stage between two white side boosters, four core engines.
+  // Heights match the repair zones below (cabin 72-108, avionics 108-186, fuel 194-262, engines 262-292).
   function rocketShape(y) {
-    const L = RX - 17, R = RX + 17;
-    // Launch escape tower.
-    px(RX - 1, y + 50, 2, 22, '#c8ccd6');
-    px(RX - 3, y + 54, 6, 8, '#d8d0dc'); px(RX + 1, y + 54, 2, 8, '#a8a0b4');
-    px(RX - 1, y + 46, 2, 4, '#ff6a4a');
-    // Crew capsule: cone with two windows and a heat-shield ring.
-    for (let yy = 72; yy < 104; yy++) shadedRow(y + yy, RX, Math.round(12 + (yy - 72) * 0.7) | 1, 1);
-    for (const wx of [RX - 8, RX + 2]) { px(wx, y + 86, 5, 4, '#2a2440'); px(wx, y + 86, 2, 1, '#9ad6ff'); }
-    px(L, y + 104, 34, 4, '#5a4a5a'); px(L, y + 104, 34, 1, '#7a6a7a');
-    // Upper stage with panel seams and a stencilled mission name.
-    shadedRow(y + 108, RX, 34, 78);
-    for (const sy of [130, 158]) px(L + 1, y + sy, 32, 1, '#cbb8cc');
-    if (typeof PixelText !== 'undefined') ['F', 'M', '-', '1'].forEach((ch, i) => PixelText.draw(ctx, ch, RX - 3, y + 116 + i * 9, '#3a2c48'));
-    // Interstage with ribs.
-    px(L, y + 186, 34, 8, '#2a2236'); px(L, y + 186, 34, 1, '#4a3e5c');
-    for (let x = L + 2; x < R; x += 4) px(x, y + 187, 1, 7, '#3a3048');
-    // First stage with roll-pattern quarters and a seam.
-    shadedRow(y + 194, RX, 34, 68);
-    shadedRow(y + 200, RX - 8.5, 17, 14, ['#4a3e5c', '#2a2236', '#221c2e', '#1a1624', '#120e1a']);
-    shadedRow(y + 214, RX + 8.5, 17, 14, ['#4a3e5c', '#2a2236', '#221c2e', '#1a1624', '#120e1a']);
-    px(L + 1, y + 240, 32, 1, '#cbb8cc');
-    // Swept fins, sunlit left and shaded right.
-    for (let k = 0; k < 36; k++) {
-      const w = Math.floor(k * 14 / 36);
-      if (w) { px(L - w, y + 236 + k, w, 1, '#d8c6d6'); px(L - w, y + 236 + k, 1, 1, '#ffcf9a'); }
-      if (w) { px(R, y + 236 + k, w, 1, '#9a80a0'); px(R + w - 1, y + 236 + k, 1, 1, '#6a5070'); }
+    const ORANGE = ['#ffd08a', '#f09a3a', '#d8802c', '#b05e1e', '#7a3a10'];
+    const WHITE = ['#ffffff', '#eceef4', '#cfd3de', '#a8aebc', '#7a8090'];
+    // Launch abort tower: spire, red tip, abort motor with small nozzles.
+    px(RX - 1, y + 46, 2, 26, '#c8ccd6'); px(RX, y + 46, 1, 26, '#eef0f6');
+    px(RX - 1, y + 44, 2, 3, '#ff6a4a');
+    px(RX - 3, y + 54, 6, 9, '#e6e8ee'); px(RX + 1, y + 54, 2, 9, '#a8aebc');
+    for (const nx of [RX - 4, RX + 3]) px(nx, y + 62, 1, 2, '#5a5f6c');
+    // Capsule fairing (ogive) with two windows; heat shield and service module below it.
+    for (let yy = 70; yy < 104; yy++) shadedRow(y + yy, RX, Math.round(4 + (yy - 70) * 0.53) | 1, 1, WHITE);
+    for (const wx of [RX - 6, RX + 2]) { px(wx, y + 88, 4, 3, '#2a2440'); px(wx, y + 88, 1, 1, '#9ad6ff'); }
+    px(RX - 11, y + 104, 22, 2, '#5a4030');
+    shadedRow(y + 106, RX, 22, 6, WHITE); px(RX - 11, y + 108, 22, 1, '#b08020');
+    // Upper stage (white) with seams and the mission name.
+    shadedRow(y + 112, RX, 20, 38, WHITE);
+    for (const sy of [124, 140]) px(RX - 10, y + sy, 20, 1, '#cfd3de');
+    if (typeof PixelText !== 'undefined') ['F', 'M', '-', '1'].forEach((ch, k) => PixelText.draw(ctx, ch, RX - 2, y + 114 + k * 9, '#3a3f4c'));
+    // Adapter: widens from the upper stage to the core.
+    for (let yy = 150; yy < 158; yy++) shadedRow(y + yy, RX, 20 + Math.round((yy - 150) * 0.75) * 2, 1, WHITE);
+    px(RX - 13, y + 157, 26, 1, '#5a5f6c');
+    // Core stage: orange foam insulation with a darker intertank band and speckle.
+    shadedRow(y + 158, RX, 26, 118, ORANGE);
+    px(RX - 13, y + 188, 26, 8, '#b8662a'); for (let x = RX - 12; x < RX + 13; x += 3) px(x, y + 189, 1, 6, '#94501e');
+    px(RX - 13, y + 236, 26, 1, '#94501e');
+    for (let k = 0; k < 60; k++) px(RX - 12 + ((k * 37) % 24), y + 160 + ((k * 53) % 112), 1, 1, k % 2 ? '#ffc070' : '#c46a22');
+    // Side boosters: nose cones, white bodies with dark attach rings, flared skirts and big nozzles.
+    for (const bx of [RX - 21, RX + 21]) {
+      for (let yy = 144; yy < 162; yy++) shadedRow(y + yy, bx, Math.max(1, Math.round((yy - 144) * 0.7)) | 1, 1, WHITE);
+      shadedRow(y + 162, bx, 12, 106, WHITE);
+      for (const ry of [172, 214, 252]) { px(bx - 6, y + ry, 12, 2, '#3a3f4c'); px(bx - 6, y + ry, 12, 1, '#5a5f6c'); }
+      for (let yy = 268; yy < 280; yy++) shadedRow(y + yy, bx, 12 + Math.floor((yy - 268) / 3) * 2, 1, WHITE);
+      for (let k = 0; k < 12; k++) { const w = 8 + Math.floor(k / 2); px(bx - w / 2, y + 280 + k, w, 1, '#4a4a56'); px(bx - w / 2, y + 280 + k, 1, 1, '#7a7a88'); }
+      px(bx - 7, y + 291, 14, 1, '#1a1626');
     }
-    // Engine skirt and three nozzles.
-    for (let k = 0; k < 18; k++) px(L - Math.floor(k / 9), y + 262 + k, 34 + Math.floor(k / 9) * 2, 1, k % 4 ? '#4a4458' : '#3a3448');
-    px(L - 2, y + 262, 3, 18, '#6a6478');
-    for (const nx of [RX - 12, RX, RX + 12]) {
-      for (let k = 0; k < 12; k++) {
-        const w = 6 + Math.floor(k / 3);
-        px(nx - w / 2, y + 280 + k, w, 1, '#5e5870');
-        px(nx - w / 2, y + 280 + k, 1, 1, '#8a84a0');
-      }
-      px(nx - 4, y + 291, 8, 1, '#1a1626');
+    // Core engine section and four engines between the boosters.
+    px(RX - 13, y + 276, 26, 4, '#5a5a66'); px(RX - 13, y + 276, 26, 1, '#7a7a88');
+    for (const nx of [RX - 9, RX - 3, RX + 3, RX + 9]) {
+      for (let k = 0; k < 11; k++) { const w = 3 + Math.floor(k / 4); px(nx - w / 2, y + 280 + k, w, 1, '#5e5870'); }
+      px(nx - 2, y + 290, 5, 1, '#1a1626');
     }
   }
 
@@ -540,7 +544,7 @@ const Render = (function () {
     // Cryogenic boil-off: real rockets vent vapour while fuelled.
     puffs(t, RX + 20, y + 124, 4, '#e6ecf5', 28, 20);
     const zone = s.active && FAILURES_REF[s.active] ? FAILURES_REF[s.active].zone : null;
-    if (zone === 'fuel') puffs(t * 1.6, RX - 19, y + 250, 6, '#ffc85a', -20, 12);
+    if (zone === 'fuel') puffs(t * 1.6, RX - 12, y + 250, 6, '#ffc85a', -20, 12);
     if (zone === 'engine' && Math.floor(t * 8) % 3 === 0) {
       for (let k = 0; k < 6; k++) px(RX - 14 + ((t * 37 + k * 13) % 28), y + 294 + ((k * 5 + t * 40) % 10), 2, 2, k % 2 ? '#ffe08a' : '#ff9a4a');
     }
@@ -600,11 +604,12 @@ const Render = (function () {
     ctx.globalAlpha = 1;
     // Outer layer first, hotter cores on top; each layer tapers to a point.
     const layers = [['#ff5a24', 30, 84], ['#ffb547', 22, 64], ['#ffe9a8', 14, 42], ['#ffffff', 8, 22]];
-    layers.forEach(([c, w, l], i) => {
-      const len = l * power * (0.85 + 0.15 * Math.sin(t * 40 + i * 2));
+    // Two booster flames (big and bright) and the core engines' flame between them.
+    for (const [fx, size] of [[RX - 21, 0.75], [RX + 21, 0.75], [RX, 0.55]]) layers.forEach(([c, w, l], i) => {
+      const len = l * power * size * 1.3 * (0.85 + 0.15 * Math.sin(t * 40 + i * 2 + fx));
       for (let r = 0; r < len; r += 2) {
-        const ww = Math.max(1, w * Math.sqrt(1 - r / len));
-        px(RX - ww / 2, y + BASE + r, ww, 2, c);
+        const ww = Math.max(1, w * size * Math.sqrt(1 - r / len));
+        px(fx - ww / 2, y + BASE + r, ww, 2, c);
       }
     });
     // Shock diamonds: bright beads in a supersonic exhaust once at full thrust.
@@ -748,11 +753,6 @@ const Render = (function () {
     const p = (x, y, w, h, c) => { context.fillStyle = c; context.fillRect(x, y, w, h); };
     const red = alarm && Math.floor(t * 4) % 2;
     p(0, 0, 48, 48, red ? '#4a1230' : '#1e1236');
-    // Console screens behind, with scrolling data lines.
-    for (const [sx, sy] of [[2, 4], [34, 6]]) {
-      p(sx, sy, 12, 10, '#0c0a1c'); p(sx + 1, sy + 1, 10, 8, red ? '#5a1a2a' : '#123a4a');
-      for (let k = 0; k < 3; k++) p(sx + 2, sy + 2 + ((k * 3 + Math.floor(t * 4)) % 7), 4 + ((k * 5) % 5), 1, red ? '#ff6a7a' : '#6fe3ff');
-    }
     // Shoulders, shirt, collar and a round mission patch.
     p(8, 38, 32, 10, '#2c4a7a'); p(8, 38, 32, 2, '#3a5c90'); p(6, 42, 4, 6, '#24406a'); p(38, 42, 4, 6, '#1e3658');
     p(19, 37, 10, 4, '#e8e2cf'); p(21, 39, 6, 3, '#c9c1ae');
@@ -776,7 +776,6 @@ const Render = (function () {
     p(12, 4, 24, 2, '#2a2f3c'); p(10, 6, 3, 4, '#2a2f3c'); p(35, 6, 3, 4, '#2a2f3c');
     p(9, 16, 5, 9, '#2a2f3c'); p(9, 17, 2, 6, '#3e4456'); p(34, 16, 5, 9, '#2a2f3c');
     p(35, 25, 2, 4, '#2a2f3c'); p(28, 28, 8, 2, '#2a2f3c'); p(26, 27, 3, 4, '#3e4456');
-    p(27, 28, 1, 1, alarm ? '#ff4a4a' : '#4fd17a');
   }
 
   let FAILURES_REF = {};

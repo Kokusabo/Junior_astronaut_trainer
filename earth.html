@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mission 4: Back to Earth</title>
+  <link rel="stylesheet" href="style.css?v=7">
+</head>
+<body class="fit-screen flying">
+  <main class="game moon">
+    <header class="topbar">
+      <div>
+        <h1 class="px">Mission 4: Back to Earth</h1>
+        <p id="level-name" class="px">Lift off, fly home, splash down</p>
+      </div>
+      <div class="top-btns">
+        <a id="help-btn" class="icon-btn px" href="tutorial.html">Help</a>
+        <button id="back-btn" class="icon-btn px">Menu</button>
+        <button id="mute-btn" class="icon-btn px" aria-label="Toggle sound">SOUND ON</button>
+      </div>
+    </header>
+    <div class="layout">
+      <div class="col-main">
+        <div class="scene-wrap">
+          <canvas id="map" width="640" height="360" aria-label="The trip back to Earth"></canvas>
+        </div>
+        <section class="radio" aria-live="polite">
+          <canvas id="portrait" width="48" height="48" aria-hidden="true"></canvas>
+          <div class="radio-body">
+            <p class="radio-who px">FLIGHT CONTROL · CH 4</p>
+            <p id="radio"></p>
+            <canvas id="radio-canvas" width="1" height="1" aria-hidden="true"></canvas>
+          </div>
+        </section>
+      </div>
+      <div class="col-side">
+        <section id="home-panel" class="flight-panel">
+          <h2 id="home-title" class="px">Lift-off</h2>
+          <p id="home-text" class="pxw"></p>
+          <div class="land-pad home-pad">
+            <button id="up-btn" class="px">UP</button>
+            <button id="action-btn" class="primary px">ACTION</button>
+            <button id="down-btn" class="px">DOWN</button>
+          </div>
+          <p class="pxw flight-keys home-keys">Keys: UP and DOWN steer, SPACE = thrust / burn</p>
+          <div class="landing-end home-end" hidden>
+            <p id="trip-summary" class="pxw trip-summary"></p>
+            <button id="again-btn" class="primary px">Play Mission 4 again</button>
+            <button id="start-btn" class="px">Play the whole trip again</button>
+          </div>
+        </section>
+      </div>
+    </div>
+    <footer id="credits">Earth: NASA GIBS and EPIC. Moon terrain: NASA LRO LOLA via Moon Trek. Splashdown zone: NASA Orion recovery (Pacific). Art and sound generated in code.</footer>
+  </main>
+
+  <script src="src/campaign.js?v=7"></script>
+  <script src="src/sfx.js?v=7"></script>
+  <script src="src/pixeltext.js?v=7"></script>
+  <script src="src/render.js?v=7"></script>
+  <script src="src/moon-data.js?v=7"></script>
+  <script src="src/moon.js?v=7"></script>
+  <script src="data/earth-maps.js?v=7"></script>
+  <script src="data/moon-nasa.js?v=7"></script>
+  <script src="src/moon-render.js?v=7"></script>
+  <script src="src/launch.js?v=7"></script>
+  <script src="src/tli.js?v=7"></script>
+  <script src="src/tli-render.js?v=7"></script>
+  <script src="src/landing.js?v=7"></script>
+  <script src="src/landing-render.js?v=7"></script>
+  <script src="src/ascent-render.js?v=7"></script>
+  <script src="src/dock.js?v=7"></script>
+  <script src="src/dock-render.js?v=7"></script>
+  <script src="src/reentry.js?v=7"></script>
+  <script src="src/reentry-render.js?v=7"></script>
+  <script src="src/home-main.js?v=7"></script>
+</body>
+</html>

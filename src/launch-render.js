@@ -51,18 +51,23 @@ const LaunchRender = (function () {
     return sprites[key];
   }
 
-  // Sky colour by altitude (km): blue near the ground, black in space.
-  const SKY = [[0, [106, 176, 240]], [8, [58, 120, 208]], [20, [26, 58, 138]], [40, [10, 20, 64]], [70, [3, 2, 10]]];
-  function skyAt(h) {
-    for (let i = 1; i < SKY.length; i++) if (h < SKY[i][0]) {
-      const [a, ca] = SKY[i - 1], [b, cb] = SKY[i], k = (h - a) / (b - a);
+  // Sunset sky, like Mission 1: purple overhead, pink and orange at the horizon, fading to black in space.
+  const TOP = [[0, [44, 26, 84]], [10, [28, 16, 64]], [30, [12, 8, 34]], [70, [3, 2, 10]]];
+  const LOW = [[0, [255, 156, 100]], [6, [236, 110, 112]], [20, [120, 52, 104]], [45, [40, 20, 60]], [80, [8, 6, 22]]];
+  function lerpStops(S, h) {
+    for (let i = 1; i < S.length; i++) if (h < S[i][0]) {
+      const [a, ca] = S[i - 1], [b, cb] = S[i], k = (h - a) / (b - a);
       return ca.map((v, j) => Math.round(v + (cb[j] - v) * k));
     }
-    return SKY[SKY.length - 1][1];
+    return S[S.length - 1][1];
   }
+  // Coast skyline in screen space (does not move with the zoom): buildings with a few lit windows.
+  const skyline = [];
+  for (let x = -4; x < W; ) { const w = 8 + Math.floor(rnd() * 22), h = 4 + Math.floor(rnd() * (rnd() < 0.15 ? 34 : 14)); skyline.push([x, w, h]); x += w + Math.floor(rnd() * 6); }
   const rgb = (c, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 
   // Per-launch state (camera, trail, smoke, falling stages).
+  const PAD = { systems: {}, active: null, checking: 0 }; // a quiet pad: no faults, no scans
   let cur = null, trail = [], smoke = [], debris = [], seen = 0, lastT = 0, path = null, banner = { text: '', t: -9, col: '#fff' };
   function reset(s, t) { cur = s; trail = []; smoke = []; debris = []; seen = 0; lastT = t; path = Launch.idealPath(s.cfg); banner = { text: '', t: -9, col: '#fff' }; }
 
@@ -70,45 +75,84 @@ const LaunchRender = (function () {
     ctx = context;
     ctx.imageSmoothingEnabled = false;
     if (cur !== s) reset(s, t);
+    // Countdown and liftoff use the Mission 1 pad scene (same rocket, tower, dusk light), then the ascent camera.
+    if (typeof Render !== 'undefined' && s.status === 'flying' && s.t < 2.5) {
+      Render.draw(context, PAD, t, {}, s.t < 0 ? -1 : s.t);
+      ctx = context; ctx.imageSmoothingEnabled = false;
+      hud(t, s);
+      return;
+    }
     const dt = Math.min(0.1, Math.max(0, t - lastT)); lastT = t;
     const c = s.cfg;
     const k = Math.max(0.35, 650 / (1 + s.y * 9)); // px per km: 650 on the pad, under 1 in orbit
-    const SX = (wx) => RX + (wx - s.x) * k, SY = (wy) => RY + RH / 2 - 2 - (wy - s.y) * k; // world y = the rocket's base
+    const lift = Math.max(0, 1 - s.y / 1.5) * 52; // near the pad the camera sits lower: less empty ground
+    const SX = (wx) => RX + (wx - s.x) * k, SY = (wy) => RY + lift + RH / 2 - 2 - (wy - s.y) * k; // world y = the rocket's base
     const shake = s.t > -0.5 && s.y < 3 && s.status === 'flying' ? 2 : s.y < 12 && s.firing && s.burnT > c.maxQ[0] && s.burnT < c.maxQ[1] ? 1 : 0;
     ctx.save();
     if (shake) ctx.translate(Math.round((Math.random() - 0.5) * 2 * shake), Math.round((Math.random() - 0.5) * 2 * shake));
 
-    // Sky: a few bands, lighter toward the horizon. Stars once the air is thin.
-    const sky = skyAt(s.y), low = skyAt(Math.max(0, s.y - 12));
-    for (let b = 0; b < 8; b++) { const q = b / 7; px(-4, -4 + b * (H / 8 + 1), W + 8, H / 8 + 2, rgb(sky.map((v, j) => v + (low[j] - v) * q * 0.6))); }
-    if (s.y > 20) { ctx.globalAlpha = Math.min(1, (s.y - 20) / 40); for (const st of stars) px(st.x, st.y, 1, 1, st.b > 0.6 ? '#ffffff' : '#8a84c0'); ctx.globalAlpha = 1; }
-
-    // Earth: flat Florida coast near the pad, then a curved planet as we climb.
+    // Sky: smooth bands from the top colour to the horizon glow (more colour near the horizon).
     const gy = SY(0);
+    const top = lerpStops(TOP, s.y), low = lerpStops(LOW, s.y), hz = Math.min(H, Math.max(60, gy));
+    for (let b = 0; b < 40; b++) {
+      const y0 = (b / 40) * hz, q = Math.pow(b / 39, 1.8);
+      px(-4, y0 - 4, W + 8, hz / 40 + 5, rgb(top.map((v, j) => v + (low[j] - v) * q)));
+    }
+    if (hz < H) px(-4, hz, W + 8, H - hz + 4, rgb(low));
+    if (s.y > 8) { ctx.globalAlpha = Math.min(1, (s.y - 8) / 30); for (const st of stars) if (st.y < hz - 10) px(st.x, st.y, 1, 1, st.b > 0.6 ? '#ffffff' : '#b08ac0'); ctx.globalAlpha = 1; }
+    // The setting Sun, behind the launch to the west (the rocket flies east, to the right).
+    const sun = (x, y, r, bands) => {
+      for (let g = 10; g >= 1; g--) { ctx.globalAlpha = 0.05; ctx.fillStyle = '#ff8a5a'; ctx.beginPath(); ctx.arc(x, y, r + g * 5, 0, Math.PI * 2); ctx.fill(); }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#ffb547'; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffe9a8'; ctx.beginPath(); ctx.arc(x, y, r - Math.max(2, r * 0.18), 0, Math.PI * 2); ctx.fill();
+      if (bands) for (let k2 = 0; k2 < 4; k2++) px(x - r, y + 2 + k2 * 5, r * 2, 2, rgb(low)); // haze bands across the low Sun
+    };
+
+    // Earth: the coast at dusk near the pad, then a curved planet with a twilight glow as we climb.
     if (k > 25) {
+      if (gy < H + 40) sun(70, gy - 6, 24, true);
       if (gy < H + 4) {
-        px(-4, gy, W + 8, H - gy + 4, '#2a5a8a'); // Atlantic Ocean (downrange, to the east)
         const coast = SX(0.35); // the pad is a few hundred metres from the Atlantic beach
-        if (coast > -4) px(-4, gy, coast + 4, H - gy + 4, '#3a6a34');
-        if (coast > -4) px(-4, gy, coast + 4, 2, '#5a8a44');
-        px(coast, gy, W, 2, '#4a7ab0');
+        px(-4, gy, W + 8, H - gy + 4, '#2a2050'); // Atlantic Ocean (downrange, to the east), dusk
+        for (let r2 = 0; r2 < 8; r2++) px(coast + 10 + ((r2 * 97) % 400), gy + 4 + r2 * 6, 30 + (r2 % 3) * 20, 1, 'rgba(255,170,140,0.35)'); // sky glints
+        if (coast > -4) {
+          for (const [x, w, h] of skyline) if (x < coast - 10) { px(x, gy - h, w, h, '#22162e'); if (h > 10) for (let wy = gy - h + 3; wy < gy - 2; wy += 5) if ((x + wy) % 3 === 0) px(x + 2, wy, 2, 1, '#ffcf6b'); }
+          px(-4, gy, coast + 4, H - gy + 4, '#24182e');
+          px(-4, gy, coast + 4, 1, '#5a3a5a');
+          // The lagoon behind the pad, mirroring the sunset, with the Sun's reflection under it.
+          const ly = gy + 14;
+          if (ly < H) {
+            px(-4, ly, coast - 30, 18, rgb(low.map((v) => v * 0.55)));
+            for (let r2 = 0; r2 < 6; r2++) px(70 - 18 + ((r2 * 7) % 9), ly + 2 + r2 * 3, 36 - r2 * 4, 1, r2 % 2 ? '#ffb547' : '#ffe9a8');
+            for (let r2 = 0; r2 < 10; r2++) px(130 + ((r2 * 83) % Math.max(10, coast - 160)), ly + 3 + (r2 % 5) * 3, 14 + (r2 % 3) * 8, 1, 'rgba(255,200,170,0.35)');
+            px(-4, ly + 18, coast - 30, 1, '#3a2a40');
+          }
+          for (let lx = 20; lx < coast - 20; lx += 46) px(lx, gy + 40, 2, 2, '#ffcf6b'); // road lights
+          px(coast - 6, gy, 6, 2, '#c8a07a'); // beach
+        }
       }
     } else {
       const cy = SY(-R_EARTH), r = R_EARTH * k;
-      ctx.fillStyle = '#1e4a8a'; ctx.beginPath(); ctx.arc(RX, cy, r, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = 'rgba(240,245,255,0.25)';
+      ctx.fillStyle = '#1a2456'; ctx.beginPath(); ctx.arc(RX, cy, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,200,180,0.18)';
       for (let i = 0; i < 30; i++) { const a = -Math.PI / 2 + (i - 15) * 0.0025 * (20 / Math.max(1, k)); ctx.fillRect(Math.round(RX + Math.cos(a) * (r - 6 - (i % 3) * 5)), Math.round(cy + Math.sin(a) * (r - 6 - (i % 3) * 5)), 6 + (i % 4) * 4, 2); }
-      for (let i = 1; i <= 4; i++) { ctx.strokeStyle = `rgba(120,180,255,${0.5 / i})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(RX, cy, r + i * 2, Math.PI, Math.PI * 2); ctx.stroke(); }
+      // Twilight along the edge of the Earth: orange, pink, then the blue of the upper air.
+      for (const [d, col] of [[1, 'rgba(255,150,80,0.8)'], [3, 'rgba(255,100,120,0.55)'], [5, 'rgba(140,90,190,0.4)'], [8, 'rgba(70,80,170,0.25)']]) { ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(RX, cy, r + d, Math.PI, Math.PI * 2); ctx.stroke(); }
+      const sa = -Math.PI / 2 - Math.min(0.35, 180 / r); // the Sun just above the edge, off to the west
+      sun(RX + Math.cos(sa) * (r + 6), cy + Math.sin(sa) * (r + 6), 10, false);
     }
-    // Pad: flame trench and the launch tower beside the rocket.
+    // Pad: flame trench and the red launch tower beside the rocket (as in Mission 1).
     if (k > 60) {
       const bx = SX(0), u = k / 650; // u: 1 px per 1.5 m sprite scale at liftoff
-      px(bx - 30 * u, gy - 2, 60 * u, 4, '#8a8a90');
-      const tx = bx - 22 * u, th = 82 * u;
-      px(tx - 6 * u, gy - th, 7 * u, th, '#6a6a74');
-      for (let y = 0; y < th; y += Math.max(2, 6 * u)) px(tx - 6 * u, gy - th + y, 7 * u, 1, '#3a3a44');
-      px(tx - 8 * u, gy - th - 4 * u, 11 * u, 4 * u, '#8a8a94');
-      if (s.t < 0.5) px(tx, gy - th * 0.72, 6 * u, 2 * u, '#9a9aa4'); // crew access arm
+      px(bx - 34 * u, gy - 3 * u, 68 * u, 3 * u + 1, '#4a4258'); px(bx - 34 * u, gy - 3 * u, 68 * u, 1, '#7a6a80');
+      const tx = bx - 24 * u, th = 82 * u, tw = 8 * u;
+      px(tx - tw, gy - th, 2 * u + 1, th, '#a8383a'); px(tx - 2 * u, gy - th, 2 * u + 1, th, '#5a1c2c');
+      for (let yy = 0; yy < th; yy += Math.max(3, 7 * u)) { px(tx - tw, gy - th + yy, tw, Math.max(1, u), '#a8383a'); px(tx - tw, gy - th + yy + 3 * u, tw, 1, '#7a2a34'); }
+      px(tx - tw - 6 * u, gy - th - 3 * u, tw + 14 * u, 3 * u, '#a8383a'); // hammerhead crane
+      px(tx - tw / 2, gy - th - 14 * u, 1, 11 * u, '#5c6274'); // lightning mast
+      if (Math.floor(t * 1.5) % 2) px(tx - tw / 2 - 1, gy - th - 15 * u, 3, 3, '#ff4a4a');
+      if (s.t < 0.5) px(tx, gy - th * 0.72, 7 * u, 2 * u, '#7a2a34'); // crew access arm
     }
     // Guidance line: where a perfect ascent goes.
     if (s.status !== 'abort') {
@@ -125,10 +169,12 @@ const LaunchRender = (function () {
         const x = SX(cx0), y = SY(ca), w = cw * k;
         if (x + w < -10 || x - w > W + 10 || y < -40 || y > H + 40 || w < 2) continue;
         const thin = ca > 7;
-        ctx.fillStyle = thin ? 'rgba(240,245,255,0.35)' : 'rgba(250,252,255,0.9)';
+        ctx.fillStyle = thin ? 'rgba(255,170,150,0.4)' : 'rgba(176,96,122,0.95)'; // sunset clouds: pink-purple bodies
         if (thin) { ctx.fillRect(Math.round(x - w), Math.round(y), Math.round(w * 2), Math.max(1, Math.round(w * 0.05))); continue; }
         for (let j = 0; j < 4; j++) { const r = w * (0.35 + 0.1 * ((j * 7) % 3)); ctx.beginPath(); ctx.ellipse(Math.round(x - w * 0.6 + j * w * 0.4), Math.round(y - r * 0.2), r, r * 0.45, 0, 0, Math.PI * 2); ctx.fill(); }
-        ctx.fillStyle = 'rgba(190,205,225,0.8)'; ctx.fillRect(Math.round(x - w * 0.9), Math.round(y + w * 0.1), Math.round(w * 1.8), Math.max(1, Math.round(w * 0.12)));
+        ctx.fillStyle = 'rgba(255,190,150,0.85)'; // tops lit by the low Sun
+        for (let j = 0; j < 4; j++) { const r = w * (0.35 + 0.1 * ((j * 7) % 3)); ctx.fillRect(Math.round(x - w * 0.6 + j * w * 0.4 - r * 0.7), Math.round(y - r * 0.62), Math.round(r * 1.2), Math.max(1, Math.round(r * 0.12))); }
+        ctx.fillStyle = 'rgba(80,40,90,0.8)'; ctx.fillRect(Math.round(x - w * 0.9), Math.round(y + w * 0.1), Math.round(w * 1.8), Math.max(1, Math.round(w * 0.12)));
       }
     };
     drawClouds(false);
@@ -141,13 +187,13 @@ const LaunchRender = (function () {
       if (x < -10 || x > W + 10 || y < -10 || y > H + 10) continue;
       ctx.globalAlpha = Math.max(0, 1 - p.age / 7) * (p.y < 40 ? 0.7 : 0.25);
       const r = Math.max(1, Math.min(10, (0.004 + p.age * 0.004) * k));
-      px(x - r / 2, y - r / 2, r, r, p.y < 40 ? '#e6e6ea' : '#a8b4d0');
+      px(x - r / 2, y - r / 2, r, r, p.y < 40 ? '#f0d4cc' : '#b0a0c8'); // smoke lit warm by the sunset
     }
     smoke = smoke.filter((p) => (p.age += dt) < 4);
     for (const p of smoke) {
       p.x += p.vx * dt; p.y += p.vy * dt; p.r += 0.01 * dt;
       ctx.globalAlpha = Math.max(0, 1 - p.age / 4) * 0.9;
-      ctx.fillStyle = '#f0f0f2'; ctx.beginPath(); ctx.arc(Math.round(SX(p.x)), Math.round(SY(p.y)), Math.max(1, p.r * k), 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = p.age < 1.5 ? '#ffe2d0' : '#d8b8c4'; ctx.beginPath(); ctx.arc(Math.round(SX(p.x)), Math.round(SY(p.y)), Math.max(1, p.r * k), 0, Math.PI * 2); ctx.fill();
     }
     ctx.globalAlpha = 1;
 
@@ -164,7 +210,7 @@ const LaunchRender = (function () {
       d.vy -= c.g * c.SCALE * 12 * dt; d.vx *= 1 - 0.5 * dt; d.x += d.vx * dt * c.posScale; // falls away fast so it reads on screen d.y += d.vy * dt * c.posScale; d.rot += d.spin * dt;
       const x = SX(d.x), y = SY(d.y);
       if (x < -40 || x > W + 40 || y < -40 || y > H + 40) continue;
-      ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.rotate(d.rot);
+      ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.rotate(d.rot); const ds = Math.max(0.25, Math.min(1, k / 6)); ctx.scale(ds, ds); // far away = smaller
       if (d.kind === 'booster') { px(-2, -18, 4, 36, '#e6e8ee'); px(-2, 16, 4, 3, '#4a4a56'); }
       else if (d.kind === 'core') { px(-4, -16, 8, 32, '#e8862a'); px(-4, 16, 8, 3, '#5a5a66'); }
       else { px(-1, -5, 2, 10, '#c8ccd6'); px(-1, -6, 2, 2, '#ff4d6a'); px(-1, 5, 2, 3 + Math.random() * 3, '#ffd34d'); }
@@ -174,7 +220,7 @@ const LaunchRender = (function () {
     // The rocket, tilted by its pitch, with flames: bright smoky boosters, pale blue hydrogen core flame.
     if (s.status !== 'abort') {
       ctx.save();
-      ctx.translate(RX, RY);
+      ctx.translate(RX, RY + Math.round(lift));
       ctx.rotate(((90 - s.pitch) * Math.PI) / 180);
       if (s.firing && s.t > -0.3) {
         const wide = 1 + Math.min(3, s.y / 25); // flames spread out in thin air
@@ -196,7 +242,7 @@ const LaunchRender = (function () {
     } else {
       // Abort: the capsule rockets away from the falling stack, then floats down under parachutes.
       const at = t - banner.t;
-      const x = RX + at * 20, y = RY - at * 60 + at * at * 18;
+      const x = RX + at * 20, y = RY + lift - at * 60 + at * at * 18;
       if (at < 1.5) { px(x - 3, y - 2, 6, 6, '#eef0f6'); px(x - 2, y + 4, 4, 8 + Math.random() * 6, '#ffd34d'); }
       else { px(x - 3, y, 6, 6, '#eef0f6'); for (let i = 0; i < 3; i++) { ctx.fillStyle = i % 2 ? '#ff6a4d' : '#ffffff'; ctx.beginPath(); ctx.arc(x - 8 + i * 8, y - 16, 6, Math.PI, 0); ctx.fill(); } }
       if (at < 0.3) { ctx.fillStyle = 'rgba(255,220,180,0.6)'; ctx.fillRect(0, 0, W, H); }
